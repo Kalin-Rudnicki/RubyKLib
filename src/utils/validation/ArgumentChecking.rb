@@ -71,6 +71,14 @@ module KLib
 				false
 			end
 			
+			def nil_check(obj, name)
+			
+			end
+			
+			def boolean_check(obj, name)
+			
+			end
+			
 			private
 				
 				def throw_error(*args, &block)
