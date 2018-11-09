@@ -11,6 +11,8 @@ module KLib
 		
 		class EnumCheckError < ArgumentCheckError; end
 		
+		class RespondToCheckError < ArgumentCheckError; end
+		
 		class << self
 			
 			def check(&block)
@@ -30,6 +32,7 @@ module KLib
 			end
 			
 			def type_check_each(obj, name, *valid_types, &block)
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
 				raise InvalidValidationError.new("Parameter 'valid_types' must have a length > 0.") unless valid_types.length > 0
 				valid_types.each_with_index { |t, i| raise InvalidValidationError.new("Parameter 'valid_types[#{i}]'. No explicit conversion of [#{t.class.inspect}] to [Module].") unless t.is_a?(Module) }
 				type_check(obj, name, Enumerable)
@@ -49,11 +52,23 @@ module KLib
 			end
 			
 			def enum_check_each(obj, name, *valid_enums, &block)
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
 				raise InvalidValidationError.new("Parameter 'valid_enums' must have a length > 0.") unless valid_enums.length > 0
 				type_check(obj, name, Enumerable)
 				pass = true
 				obj.each_with_index { |element, index| pass &&= enum_check(element, name.nil? ? nil : "#{name}[#{index}]", *valid_enums, &block) }
 				pass
+			end
+			
+			def respond_to_check(obj, name, *methods, &block)
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'methods' must have a length > 0.") unless methods.length > 0
+				methods = methods[0] if methods.length == 1 && methods[0].is_a?(Enumerable)
+				missing = methods.select { |m| !obj.respond_to?(m) }
+				return true if missing.empty?
+				block ||= proc { |actual, obj_name, all_methods, missing_methods| RespondToCheckError.new("#{name.nil? ? '' : "Parameter '#{obj_name}'. "}[#{actual.class.inspect}] is missing methods #{missing_methods.inspect}, required: #{all_methods.inspect}.") }
+				throw_error(obj, name, methods, missing, &block)
+				false
 			end
 			
 			private
@@ -69,7 +84,7 @@ module KLib
 						when NilClass
 							# Do nothing on purpose
 						else
-							raise InvalidValidationError.new('When throwing an error, your block must: Raise an error yourself, or return on of [ArgumentChecking::ArgumentCheckError, String, NilClass].')
+							raise InvalidValidationError.new('When throwing an error, your block must: Raise an error yourself, or return on of [KLib::ArgumentChecking::ArgumentCheckError, String, NilClass].')
 					end
 				end
 		
