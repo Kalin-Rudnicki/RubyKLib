@@ -1,8 +1,6 @@
 
 class String
 	
-	# TODO: finish
-	
 	def to_snake
 		self.gsub(/::/, '/').
 			gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
