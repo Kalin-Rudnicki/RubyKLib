@@ -83,8 +83,8 @@ module KLib
 					norm.level_manager.default_value(::KLib::Logging::DEFAULT_LOG_LEVEL_MANAGER).type_check(::KLib::Logging::LogLevelManager)
 					norm.log_tolerance(:tolerance, :tol).required.type_check(::Symbol)
 					
-					norm.default_out(:out).default_value($stdout).type_check(::IO)
-					norm.default_err(:err).default_value($stderr).type_check(::IO)
+					norm.default_out(:out).default_value($stdout).type_check(::IO, ::String)
+					norm.default_err(:err).default_value($stderr).type_check(::IO, ::String)
 					
 					norm.indent_string(:indent).default_value(::KLib::Logging::Logger::DEFAULT_INDENT).type_check(::String)
 					
@@ -125,7 +125,14 @@ module KLib
 			end
 			
 			def add_source(source, hash_args = {})
-				ArgumentChecking.type_check(source, 'source', IO)
+				ArgumentChecking.type_check(source, 'source', IO, String)
+				if source.is_a?(String)
+					begin
+						File.new(source, 'w').close
+					rescue => e
+						raise RuntimeError.new("Issue creating file '#{source}'. [#{e.class.inspect}]")
+					end
+				end
 				hash_args = HashNormalizer.normalize(hash_args) do |norm|
 					norm.target.required.enum_check(:out, :err)
 					norm.range.required.enum_check(:always, :over, :under)
@@ -161,12 +168,19 @@ module KLib
 				value = "#{header_1}#{idt_str}#{value.gsub("\n", "\n#{header_2}#{idt_str}")}"
 				@sources[hash_args[:target]].each_pair do |src, src_hash|
 					if src_hash[:ranges].include?(range)
+						if src.is_a?(String)
+							auto_close = true
+							src = File.new(src, 'a')
+						else
+							auto_close = false
+						end
 						unless src_hash[:break].nil?
 							#TODO: break time
 							src.puts("#{header_2}")
 							src_hash[:break] = nil
 						end
 						src.puts(value)
+						src.close if auto_close
 					end
 				end
 			end
