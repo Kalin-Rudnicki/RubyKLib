@@ -21,5 +21,25 @@ if File.expand_path(__FILE__ ) == File.expand_path($0)
 	test('who_are_you_bro')
 	test('whyTho')
 	test('mix_itUp')
-
+	
+	def casing_test(string)
+		puts("testing string: '#{string}'")
+		[true, false].each do |nums|
+			puts("\t(:snake, #{nums}) => #{StringCasing.matches?(string, :snake, :nums => nums, :behavior => :boolean)}")
+			[:either, :upcase, :downcase].each { |start| puts("\t(:camel, #{nums}, #{start}) => #{StringCasing.matches?(string, :camel, :nums => nums, :camel_start => start, :behavior => :boolean)}") }
+		end
+		puts
+	end
+	
+	[
+		'testing',
+		'ok_then',
+		'no way',
+		'Sure',
+		'test_1_2',
+		'1_test',
+		'ok5Now',
+		'IfYa7SaySo'
+	].each { |str| casing_test(str) }
+	
 end
