@@ -3,12 +3,19 @@ require 'set'
 
 class Array
 
-	def duplicates
+	def duplicates(&block)
 		dups = Set.new
 		seen = Set.new
-		self.each do |element|
-			dups << element if seen.include?(element)
-			seen << element
+		if block_given?
+			self.each do |element|
+				dups << element if seen.include?(block.call(element))
+				seen << element
+			end
+		else
+			self.each do |element|
+				dups << element if seen.include?(element)
+				seen << element
+			end
 		end
 		dups.to_a
 	end
