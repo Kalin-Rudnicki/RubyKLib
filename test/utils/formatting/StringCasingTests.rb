@@ -22,6 +22,8 @@ if File.expand_path(__FILE__ ) == File.expand_path($0)
 	test('whyTho')
 	test('mix_itUp')
 	
+	test('hi_1_ok')
+	
 	def casing_test(string)
 		puts("testing string: '#{string}'")
 		[true, false].each do |nums|
