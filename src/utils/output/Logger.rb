@@ -70,7 +70,7 @@ module KLib
 			
 		end
 		
-		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :error, :fatal, :always)
+		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :error, :fatal, :always, :off)
 		
 		class Logger
 			
@@ -151,11 +151,11 @@ module KLib
 			end
 			
 			def log(log_level_name, value, hash_args = {})
-				time = Time.now
 				ArgumentChecking.type_check(log_level_name, 'log_level_name', Symbol)
 				hash_args = HashNormalizer.normalize(hash_args) do |norm|
 					norm.target(:to).default_value(:out).enum_check(:out, :err)
 					norm.rule.default_value(:default).type_check(::Symbol)
+					norm.time.default_value(Time.now).type_check(::Time)
 				end
 				raise NoSuchRuleError.new(hash_args[:rule]) unless @log_tolerances.key?(hash_args[:rule])
 				log_tolerance = @log_tolerances[hash_args[:rule]]
@@ -163,7 +163,7 @@ module KLib
 				
 				range = (log_level <=> log_tolerance) >= 0 ? :over : :under
 				
-				header_1, header_2 = log_headers(log_level, time)
+				header_1, header_2 = log_headers(log_level, hash_args[:time])
 				idt_str = @indent_string * @indent.value
 				value = "#{header_1}#{idt_str}#{value.gsub("\n", "\n#{header_2}#{idt_str}")}"
 				@sources[hash_args[:target]].each_pair do |src, src_hash|
@@ -197,12 +197,14 @@ module KLib
 							end
 						end
 					when :open
+						@indent + 1
 						@sources.each_value do |target|
 							target.each_value do |src_hash|
 								src_hash[:break] = :open
 							end
 						end
 					when :close
+						@indent - 1
 						@sources.each_value do |target|
 							target.each_value do |src_hash|
 								src_hash[:break] = src_hash[:break] == :open ? nil : :normal
