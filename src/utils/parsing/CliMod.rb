@@ -2,6 +2,8 @@
 Dir.chdir(File.dirname(__FILE__)) do
 	require 'set'
 	require '../../utils/validation/HashNormalizer'
+	require '../../utils/parsing/GnuMatch'
+	require '../../utils/general/ArrayUtils'
 end
 
 module KLib
@@ -83,7 +85,7 @@ module KLib
 		def find_valid_methods(method_warnings)
 			valid_methods = {}
 			
-			mets = self.instance_methods(false).map { |met| self.instance_method(met) }
+			mets = self.methods(false).map { |met| self.method(met) }
 			mets.each do |met|
 				
 				adjusted_name = met.name.to_s.gsub('_', '-')
@@ -129,7 +131,7 @@ module KLib
 					next
 				end
 				
-				valid_methods[adjusted_name.to_sym] = { :names => param_names, :rest => rest }
+				valid_methods[adjusted_name.to_sym] = { :names => param_names, :rest => rest, :method => met }
 			
 			end
 			
@@ -201,16 +203,30 @@ module KLib
 			method_info = @valid_methods[method_name]
 			@method_specs ||= {}
 			method_spec = @method_specs.key?(method_name) ? @method_specs[method_name] : MethodSpec.new(method_name)
-			method_spec.__finalize(method_info)
-			
-			
-			puts("calling method '#{method_name}' with #{args.length} arg#{args.length == 1 ? '' : 's'}:")
-			args.each { |arg| puts("    #{arg.inspect}") }
+			begin
+				method_spec.__finalize(method_info)
+			rescue MultiplyDefinedShortNamesError => e
+				$stderr.puts("[FATAL]:   Multiple definitions of parameters: #{e.duplicates.join(', ')}")
+			end
 			
 			if args.any? { |arg| arg.value == :help || (arg.type == :short_key && arg.value.include?(:h)) }
 				$stdout.puts(method_help(method_name))
 				exit(0)
 			end
+			
+			puts("calling method '#{method_name}' with #{args.length} arg#{args.length == 1 ? '' : 's'}:")
+			begin
+				args.each do |arg|
+					puts("    #{arg.inspect}")
+					method_spec << arg
+				end
+			rescue => e
+				$stderr.puts("[FATAL_ERROR]: #{e.class.inspect} => #{e.message}")
+				exit(-1)
+			end
+			method_spec.__params.each { |p| puts p.inspect }
+			
+			method_info[:method].call(*method_spec.__params.map { |p| p.__values })
 			
 			nil
 		end
@@ -223,35 +239,35 @@ module KLib
 			ArgumentChecking.type_check(method_name, 'method_name', Symbol)
 			"TO-DO: MethodHelp => #{method_name.inspect}"
 		end
-	
-	end
-	
-	class Argument
 		
-		attr_reader :original, :value, :type
-		
-		def initialize(value)
-			ArgumentChecking.type_check(value, 'value', String)
-			@original = value
-			if value.start_with?('@-')
-				@value = value[1..-1]
-				@type = :arg
-			elsif CliMod::CliRegex::SHORT_PARAM_REGEX.match?(value)
-				@value = value[1..-1].chars.map { |c| c.to_sym }
-				@type = :short_key
-			elsif CliMod::CliRegex::LONG_PARAM_REGEX.match?(value)
-				@value = value[2..-1].gsub('-', '_').to_sym
-				@type = :long_key
-			else
-				@value = value
-				@type = :arg
+		class Argument
+			
+			attr_reader :original, :value, :type
+			
+			def initialize(value)
+				ArgumentChecking.type_check(value, 'value', String)
+				@original = value
+				if value.start_with?('@-')
+					@value = value[1..-1]
+					@type = :arg
+				elsif CliMod::CliRegex::SHORT_PARAM_REGEX.match?(value)
+					@value = value[1..-1].chars.map { |c| c.to_sym }
+					@type = :short_key
+				elsif CliMod::CliRegex::LONG_PARAM_REGEX.match?(value)
+					@value = value[2..-1].gsub('-', '_').to_sym
+					@type = :long_key
+				else
+					@value = value
+					@type = :arg
+				end
+				
+				nil
 			end
 			
-			nil
-		end
+			def inspect
+				"{Argument} { value: <#{@value.inspect}>, type: <#{@type.inspect}> }"
+			end
 		
-		def inspect
-			"{Argument} { value: <#{@value.inspect}>, type: <#{@type.inspect}> }"
 		end
 		
 	end
@@ -264,10 +280,14 @@ module KLib
 			
 			@method_name = method_name
 			@params = {}
+			@seen = ::Set.new
 			
 			block.call(self) if ::Kernel.block_given?
 			
 			@locked = true
+			
+			@argument = nil
+			nil
 		end
 		
 		def param(param_name)
@@ -277,15 +297,36 @@ module KLib
 			@params[param_name] = ParamSpec.new(param_name)
 		end
 		
-		def __param(param_name)
-			ArgumentChecking.type_check(param_name, 'param_name', ::String)
-			
-			match = GnuMatch.multi_match(param_name, @param_names)
-			@names[match.nil? ? nil : match.to_sym]
+		def << (argument)
+			case argument.type
+				when :short_key
+					params = argument.value.map { |s| [s, @by_short_name[s]] }
+					not_found = params.select { |s| s[1].nil?}
+					::Kernel.raise NonExistentParametersError.new(not_found.map { |s| "-#{s[0]}" }) if not_found.any?
+					params = params.map { |p| p[1] }
+					::Kernel.raise ParameterTypeMisMatchError.new unless params.uniq.length == 1
+					@current = params
+				when :long_key
+					match = ::KLib::GnuMatch.multi_match(argument.value.to_s, @param_names)
+					if match.nil?
+						::Kernel.raise NonExistentParametersError.new(["--#{argument.value.to_s.gsub('_', '-')}"])
+					else
+						@current = [@params[match.to_sym]]
+					end
+				when :arg
+					::Kernel.raise NoDefinedParameterError.new unless @current
+					@current.each { |c| c << argument.value }
+				else
+					::Kernel.raise 'What is happening...'
+			end
 		end
 		
 		def __method_name
 			@method_name
+		end
+		
+		def __params
+			@param_names.map { |p| @params[p.to_sym] }
 		end
 		
 		def __finalize(method_spec)
@@ -300,12 +341,12 @@ module KLib
 			@locked = true
 			
 			short_names = [:h] + @params.values.map { |p| p.__short_name }.select { |s| !s.nil? }
-			
-			duplicates = short_names.select { |s| short_names.count(s) > 1 }.uniq
+			duplicates = short_names.duplicates
 			::Kernel.raise MultiplyDefinedShortNamesError.new(duplicates) if duplicates.any?
 			
-			$stdout.puts("params:")
-			@params.each_pair { |k, v| $stdout.puts("\t#{k.inspect} => #{v.inspect}") }
+			@by_short_name = @params.values.map { |p| [p.__short_name, p] }.select { |s| !s[0].nil? }.to_h
+			
+			@params.values.each { |p| p.__init_values }
 			
 			nil
 		end
@@ -323,6 +364,8 @@ module KLib
 				
 				@arg_type = :string
 				@default = :required
+				
+				@explain = nil
 				
 				@checks = {}
 			end
@@ -354,6 +397,11 @@ module KLib
 				@type = type
 			end
 			
+			def explain(*messages)
+				::KLib::ArgumentChecking.type_check_each(messages, 'messages', ::String)
+				@explain = messages
+			end
+			
 			
 			def __param_name
 				@param_name
@@ -381,9 +429,10 @@ module KLib
 			
 			def __init_values
 				@values = []
+				nil
 			end
 			
-			def __add_value(value)
+			def << (value)
 				@values << value
 			end
 			
@@ -391,9 +440,23 @@ module KLib
 				@values
 			end
 			
+			
+			def hash
+				@param_name.object_id
+			end
+			
+			def eql?(other)
+				self.__param_name == other.__param_name
+			end
+			
+			def nil?
+				false
+			end
+			
 			def inspect
 				"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
 			end
+			alias :to_s :inspect
 		
 		end
 	
@@ -422,21 +485,43 @@ module KLib
 			super("Found multiple definitions of short_names: #{duplicates.inspect}")
 		end
 	end
+	
+	class AlreadyUsedParamError < RuntimeError
+		attr_reader :param
+		def initialize(param)
+			@param = param
+			super("Already used param '#{param.__param_name}'")
+		end
+	end
+	
+	class NoDefinedParameterError < RuntimeError; end
+	
+	class ParameterTypeMisMatchError < RuntimeError; end
 
 end
 
 module TestMod
 	extend KLib::CliMod
 	
+	module Compile
+		extend KLib::CliMod
+		
+		def self.new(database_name)
+			puts(database_name.inspect)
+		end
+		
+	end
+	
 	method_spec(:main) do |s|
-		s.param(:first_name).accepts(2, 3)
+		s.param(:last_name)
+		s.param(:first_name).accepts(2, 3).short_name(:a)
 	end
 	
 	def main(first_name, last_name, age)
-	
+		puts("I have been called: #{[first_name, last_name, age].inspect}")
 	end
 	
 end
 
 $stderr = $stdout
-TestMod.parse([])
+TestMod.parse(%w{compile new --database ok then})
