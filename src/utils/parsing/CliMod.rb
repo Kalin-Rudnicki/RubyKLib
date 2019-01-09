@@ -101,8 +101,8 @@ module KLib
 				param_names = met.parameters.map { |p| p[1] }
 				
 				if param_types.length == 0
-					@warning_count += 1
 					if method_warnings
+						@warning_count += 1
 						$stderr.puts("[WARNING]: method '#{self}:#{met.name}' will be ignored (methods must have parameters)")
 					end
 					next
@@ -120,9 +120,17 @@ module KLib
 					type = param_types[idx]
 					name = param_names[idx]
 					
+					if name == :help
+						if method_warnings
+							@warning_count += 1
+							$stderr.puts("[WARNING]: method '#{met.name}' will be ignored (you can not name a parameter 'help')")
+							invalid = true
+						end
+					end
+					
 					invalid << [type, name] unless type == :req
 				end
-				if invalid.any?
+				if invalid == true || invalid.any?
 					if method_warnings
 						@warning_count += 1
 						$stderr.puts("[WARNING]: method '#{self}:#{met.name}' will be ignored (all parameters must be required, with an optional *args at the end)")
@@ -203,30 +211,23 @@ module KLib
 			method_info = @valid_methods[method_name]
 			@method_specs ||= {}
 			method_spec = @method_specs.key?(method_name) ? @method_specs[method_name] : MethodSpec.new(method_name)
-			begin
-				method_spec.__finalize(method_info)
-			rescue MultiplyDefinedShortNamesError => e
-				$stderr.puts("[FATAL]:   Multiple definitions of parameters: #{e.duplicates.join(', ')}")
-			end
 			
-			if args.any? { |arg| arg.value == :help || (arg.type == :short_key && arg.value.include?(:h)) }
-				$stdout.puts(method_help(method_name))
-				exit(0)
-			end
+			parameters = method_spec.__params.values
+			parameters += (method_info[:names] - parameters.map { |p| p.__param_name }).map { |p| MethodSpec::ParamSpec.new(p) }
+			parameters.each { |p| puts p.inspect }
 			
-			puts("calling method '#{method_name}' with #{args.length} arg#{args.length == 1 ? '' : 's'}:")
-			begin
-				args.each do |arg|
-					puts("    #{arg.inspect}")
-					method_spec << arg
-				end
-			rescue => e
-				$stderr.puts("[FATAL_ERROR]: #{e.class.inspect} => #{e.message}")
-				exit(-1)
-			end
-			method_spec.__params.each { |p| puts p.inspect }
+			booleans = parameters.select { |p| p.__arg_type == :boolean }
 			
-			method_info[:method].call(*method_spec.__params.map { |p| p.__values })
+			puts parameters.map { |p| p.__param_name }.inspect
+			puts booleans.map { |p| p.__param_name }.inspect
+			
+			names = parameters.map { |p| p.__arg_type == :boolean ? [[p.__param_name, p], [:"no_#{p.__param_name}", p]] : [[p.__param_name, p]] }.flatten(1)
+			duplicate_long_names = names.map { |p| p[0] }.duplicates
+			
+			short_names = parameters.map { |p| [p.__short_name, p] }.select { |s| !s[0].nil? }
+			puts short_names.map { |p| p[0] }.inspect
+			
+			raise DuplicateParameterDefinitionError.new(duplicate_long_names) if duplicate_long_names.any?
 			
 			nil
 		end
@@ -270,234 +271,150 @@ module KLib
 		
 		end
 		
-	end
-	
-	class MethodSpec < BasicObject
-	
-		def initialize(method_name, &block)
-			::KLib::ArgumentChecking.type_check(method_name, 'method_name', ::Symbol)
-			@locked = false
-			
-			@method_name = method_name
-			@params = {}
-			@seen = ::Set.new
-			
-			block.call(self) if ::Kernel.block_given?
-			
-			@locked = true
-			
-			@argument = nil
-			nil
-		end
 		
-		def param(param_name)
-			::Kernel.raise 'MethodSpec is locked...' if @locked
-			::KLib::ArgumentChecking.type_check(param_name, 'param_name', ::Symbol)
-			
-			@params[param_name] = ParamSpec.new(param_name)
-		end
-		
-		def << (argument)
-			case argument.type
-				when :short_key
-					params = argument.value.map { |s| [s, @by_short_name[s]] }
-					not_found = params.select { |s| s[1].nil?}
-					::Kernel.raise NonExistentParametersError.new(not_found.map { |s| "-#{s[0]}" }) if not_found.any?
-					params = params.map { |p| p[1] }
-					::Kernel.raise ParameterTypeMisMatchError.new unless params.uniq.length == 1
-					@current = params
-				when :long_key
-					match = ::KLib::GnuMatch.multi_match(argument.value.to_s, @param_names)
-					if match.nil?
-						::Kernel.raise NonExistentParametersError.new(["--#{argument.value.to_s.gsub('_', '-')}"])
-					else
-						@current = [@params[match.to_sym]]
-					end
-				when :arg
-					::Kernel.raise NoDefinedParameterError.new unless @current
-					@current.each { |c| c << argument.value }
-				else
-					::Kernel.raise 'What is happening...'
+		class EquallyNameMethodAndModError < RuntimeError
+			attr_reader :given_name
+			def initialize(given_name)
+				@given_name = given_name
+				super("Found method and mod with matching name: '#{given_name}'")
 			end
 		end
 		
-		def __method_name
-			@method_name
+		class DuplicateParameterDefinitionError < RuntimeError
+			
+			def initialize(parameters)
+				@parameters = parameters
+				super("Found duplicate parameter definitions: #{parameters.inspect}")
+			end
+			
 		end
 		
-		def __params
-			@param_names.map { |p| @params[p.to_sym] }
-		end
 		
-		def __finalize(method_spec)
-			specified = @params.keys
-			all = method_spec[:names]
-			extras = specified - all
-			::Kernel.raise NonExistentParametersError.new(extras) if extras.any?
+		class MethodSpec < BasicObject
 			
-			@param_names = method_spec[:names].map { |n| n.to_s }
-			@locked = false
-			(all - specified).each { |par| param(par) }
-			@locked = true
-			
-			short_names = [:h] + @params.values.map { |p| p.__short_name }.select { |s| !s.nil? }
-			duplicates = short_names.duplicates
-			::Kernel.raise MultiplyDefinedShortNamesError.new(duplicates) if duplicates.any?
-			
-			@by_short_name = @params.values.map { |p| [p.__short_name, p] }.select { |s| !s[0].nil? }.to_h
-			
-			@params.values.each { |p| p.__init_values }
-			
-			nil
-		end
-		
-		class ParamSpec < BasicObject
-			
-			def initialize(param_name)
-				::KLib::ArgumentChecking.type_check(param_name, 'param_name', ::Symbol)
+			def initialize(method_name, &block)
+				::KLib::ArgumentChecking.type_check(method_name, 'method_name', ::Symbol)
 				
-				@param_name = param_name
-				@short_name = nil
+				@method_name = method_name
+				@params = {}
 				
-				@min_args = 1
-				@max_args = 1
-				
-				@arg_type = :string
-				@default = :required
-				
-				@explain = nil
-				
-				@checks = {}
-			end
-			
-			
-			def short_name(short_name)
-				::KLib::ArgumentChecking.type_check(short_name, 'short_name', ::Symbol)
-				::Kernel.raise ArgumentError.new('short_name must be a single character') unless /^[A-Za-z]$/.match?(short_name.to_s)
-				
-				@short_name = short_name
-				self
-			end
-			
-			def accepts(min_args, max_args)
-				::KLib::ArgumentChecking.type_check(min_args, 'min_args', ::Integer)
-				::KLib::ArgumentChecking.type_check(max_args, 'max_args', ::Integer, ::NilClass)
-				::Kernel.raise ::ArgumentError.new("min_args must be >= 0") if min_args < 0
-				::Kernel.raise ::ArgumentError.new("max_args must be nil or >= 0") if !max_args.nil? && max_args < 0
-				::Kernel.raise ::ArgumentError.new("min_args must be >= max_args") if !max_args.nil? && min_args > max_args
-				
-				@min_args = min_args
-				@max_args = max_args
-				self
-			end
-			
-			def arg_type(type)
-				::KLib::ArgumentChecking.enum_check(type, 'type', :string, :boolean, :integer, :float)
-				
-				@type = type
-			end
-			
-			def explain(*messages)
-				::KLib::ArgumentChecking.type_check_each(messages, 'messages', ::String)
-				@explain = messages
-			end
-			
-			
-			def __param_name
-				@param_name
-			end
-			
-			def __short_name
-				@short_name
-			end
-			
-			def __min_args
-				@min_args
-			end
-			
-			def __max_args
-				@max_args
-			end
-			
-			def __arg_type
-				@arg_type
-			end
-			
-			def __default
-				@default
-			end
-			
-			def __init_values
-				@values = []
+				@locked = false
+				block.call(self) if ::Kernel.block_given?
+				@locked = true
 				nil
 			end
 			
-			def << (value)
-				@values << value
+			def param(param_name)
+				::Kernel.raise 'MethodSpec is locked...' if @locked
+				::KLib::ArgumentChecking.type_check(param_name, 'param_name', ::Symbol)
+				
+				@params[param_name] = ParamSpec.new(param_name)
 			end
 			
-			def __values
-				@values
+			def __method_name
+				@method_name
 			end
 			
-			
-			def hash
-				@param_name.object_id
+			def __params
+				@params
 			end
 			
-			def eql?(other)
-				self.__param_name == other.__param_name
-			end
+			class ParamSpec < BasicObject
+				
+				def initialize(param_name)
+					::KLib::ArgumentChecking.type_check(param_name, 'param_name', ::Symbol)
+					
+					@param_name = param_name
+					@short_name = nil
+					
+					@min_args = 1
+					@max_args = 1
+					
+					@arg_type = :string
+					
+					@on_missing = :required
+					@on_zero = nil
+					
+					@explain = nil
+					
+					@checks = {}
+				end
+				
+				
+				def short_name(short_name)
+					::KLib::ArgumentChecking.type_check(short_name, 'short_name', ::Symbol)
+					::Kernel.raise ArgumentError.new('short_name must be a single character') unless /^[A-Za-z]$/.match?(short_name.to_s)
+					
+					@short_name = short_name
+					self
+				end
+				
+				def accepts(min_args, max_args)
+					::KLib::ArgumentChecking.type_check(min_args, 'min_args', ::Integer)
+					::KLib::ArgumentChecking.type_check(max_args, 'max_args', ::Integer, ::NilClass)
+					::Kernel.raise ::ArgumentError.new("min_args must be >= 0") if min_args < 0
+					::Kernel.raise ::ArgumentError.new("max_args must be nil or >= 0") if !max_args.nil? && max_args < 0
+					::Kernel.raise ::ArgumentError.new("min_args must be >= max_args") if !max_args.nil? && min_args > max_args
+					
+					@min_args = min_args
+					@max_args = max_args
+					self
+				end
+				
+				def arg_type(type)
+					::KLib::ArgumentChecking.enum_check(type, 'type', :string, :boolean, :integer, :float)
+					
+					@arg_type = type
+				end
+				
+				def alias
+					raise 'TO-DO'
+				end
+				
+				def explain(*messages)
+					::KLib::ArgumentChecking.type_check_each(messages, 'messages', ::String)
+					@explain = messages
+				end
+				
+				def __param_name
+					@param_name
+				end
+				
+				def __short_name
+					@short_name
+				end
+				
+				def __min_args
+					@min_args
+				end
+				
+				def __max_args
+					@max_args
+				end
+				
+				def __arg_type
+					@arg_type
+				end
+				
+				def __on_missing
+					nil
+				end
+				
+				def __on_zero
+					nil
+				end
+				
+				def inspect
+					"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
+				end
+				alias :to_s :inspect
 			
-			def nil?
-				false
 			end
-			
-			def inspect
-				"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
-			end
-			alias :to_s :inspect
 		
 		end
-	
+		
 	end
 	
-	class EquallyNameMethodAndModError < RuntimeError
-		attr_reader :given_name
-		def initialize(given_name)
-			@given_name = given_name
-			super("Found method and mod with matching name: '#{given_name}'")
-		end
-	end
-	
-	class NonExistentParametersError < RuntimeError
-		attr_reader :extras
-		def initialize(extras)
-			@extras = extras
-			super("Parameters were specified, but do not exist in method: #{extras.inspect}")
-		end
-	end
-	
-	class MultiplyDefinedShortNamesError < RuntimeError
-		attr_reader :duplicates
-		def initialize(duplicates)
-			@duplicates = duplicates
-			super("Found multiple definitions of short_names: #{duplicates.inspect}")
-		end
-	end
-	
-	class AlreadyUsedParamError < RuntimeError
-		attr_reader :param
-		def initialize(param)
-			@param = param
-			super("Already used param '#{param.__param_name}'")
-		end
-	end
-	
-	class NoDefinedParameterError < RuntimeError; end
-	
-	class ParameterTypeMisMatchError < RuntimeError; end
-
 end
 
 module TestMod
@@ -515,13 +432,14 @@ module TestMod
 	method_spec(:main) do |s|
 		s.param(:last_name)
 		s.param(:first_name).accepts(2, 3).short_name(:a)
+		s.param(:is_cool).arg_type(:boolean)
 	end
 	
-	def main(first_name, last_name, age)
+	def self.main(first_name, last_name, age, is_cool)
 		puts("I have been called: #{[first_name, last_name, age].inspect}")
 	end
 	
 end
 
 $stderr = $stdout
-TestMod.parse(%w{compile new --database ok then})
+TestMod.parse(%w{--f Morena --l Iriart --a 19})
