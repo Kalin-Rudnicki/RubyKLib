@@ -213,31 +213,150 @@ module KLib
 			method_spec = @method_specs.key?(method_name) ? @method_specs[method_name] : MethodSpec.new(method_name)
 			
 			parameters = method_spec.__params.values
+			
+			non_existent_parameters = parameters.map { |p| p.__param_name } - method_info[:names]
+			raise NonExistentParameterDefinitionError.new(non_existent_parameters) if non_existent_parameters.any?
+			
 			parameters += (method_info[:names] - parameters.map { |p| p.__param_name }).map { |p| MethodSpec::ParamSpec.new(p) }
-			parameters.each { |p| puts p.inspect }
 			
 			booleans, non_booleans = parameters.partition do |p|
-				p.__arg_type == :boolean || (p.__arg_type == nil && %w{is isnt do dont}.any? { |start| p.__param_name.to_s.start_with?("#{start}_") })
+				p.__arg_type == :boolean || (p.__arg_type == nil && %w{is isnt do dont yes no}.any? { |start| p.__param_name.to_s.start_with?("#{start}_") })
 			end
-			puts("booleans:     #{booleans.map { |p| p.__param_name }.inspect}")
-			puts("non_booleans: #{non_booleans.map { |p| p.__param_name }.inspect}")
-			
 			booleans.each do |bool|
 				bool.arg_type(:boolean)
 				if bool.__boolean_mode.nil?
-					# flip, starts with?
+					if bool.__param_name.to_s.start_with?('isnt_')
+						bool.boolean_mode(:_isnt)
+					elsif bool.__param_name.to_s.start_with?('is_')
+						bool.boolean_mode(:is_isnt)
+					elsif bool.__param_name.to_s.start_with?('dont_')
+						bool.boolean_mode(:_dont)
+					elsif bool.__param_name.to_s.start_with?('do_')
+						bool.boolean_mode(:do_dont)
+					elsif bool.__param_name.to_s.start_with?('yes_')
+						bool.boolean_mode(:yes_no)
+					else
+						bool.boolean_mode(:_no)
+					end
+				end
+				if bool.__boolean_flip.nil?
+					bool.boolean_flip(%w{isnt dont no}.any? { |start| bool.__param_name.to_s.start_with?("#{start}_") })
+				end
+			end
+			non_booleans.each { |p| p.arg_type(:string) if p.__arg_type.nil? }
+			
+			mapped_params = parameters.map do |param|
+				if param.__arg_type == :boolean
+					res = case param.__boolean_mode
+						when :is_isnt
+							if param.__param_name.to_s.start_with?('isnt_')
+								base = param.__param_name.to_s[5..-1]
+							elsif param.__param_name.to_s.start_with?('is_')
+								base = param.__param_name.to_s[3..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"is_#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"isnt_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						when :_isnt
+							if param.__param_name.to_s.start_with?('isnt_')
+								base = param.__param_name.to_s[5..-1]
+							elsif param.__param_name.to_s.start_with?('is_')
+								base = param.__param_name.to_s[3..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"isnt_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						when :do_dont
+							if param.__param_name.to_s.start_with?('dont_')
+								base = param.__param_name.to_s[5..-1]
+							elsif param.__param_name.to_s.start_with?('do_')
+								base = param.__param_name.to_s[3..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"do_#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"dont_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						when :_dont
+							if param.__param_name.to_s.start_with?('dont_')
+								base = param.__param_name.to_s[5..-1]
+							elsif param.__param_name.to_s.start_with?('do_')
+								base = param.__param_name.to_s[3..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"dont_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						when :yes_no
+							if param.__param_name.to_s.start_with?('no_')
+								base = param.__param_name.to_s[3..-1]
+							elsif param.__param_name.to_s.start_with?('yes_')
+								base = param.__param_name.to_s[4..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"yes_#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"no_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						when :_no
+							if param.__param_name.to_s.start_with?('no_')
+								base = param.__param_name.to_s[3..-1]
+							elsif param.__param_name.to_s.start_with?('yes_')
+								base = param.__param_name.to_s[4..-1]
+							else
+								base = param.__param_name.to_s
+							end
+							[
+								[:"#{base}", { :param => param, :bool => !param.__boolean_flip }],
+								[:"no_#{base}", { :param => param, :bool => param.__boolean_flip }]
+							]
+						else
+							raise 'what is going on...'
+					end
+					param.__base_name = base
+					res
+				else
+					[[param.__param_name, { :param => param, :bool => nil }]]
+				end
+			end.flatten(1)
+			
+			duplicate_param_mappings = ([:help] + mapped_params.map { |p| p[0] }).duplicates
+			
+			defined_short_names = parameters.map { |p| p.__short_name }.select { |p| !p.nil? }
+			duplicate_short_names = ([:h] + defined_short_names).duplicates
+			
+			raise DuplicateParameterDefinitionError.new(duplicate_param_mappings + duplicate_short_names) if (duplicate_param_mappings + duplicate_short_names).any?
+			
+			used_short_names = [:h] + defined_short_names
+			
+			by_base_name_start = Hash.new { |h, k| h[k] = [] }
+			parameters.select { |p| p.__short_name.nil? }.each { |p| by_base_name_start[p.__base_name[0].downcase] << p }
+			
+			by_base_name_start.each_pair do |start, using_start|
+				([start.downcase, start.upcase] - used_short_names).each do |assign|
+					if using_start.any?
+						using_start.shift.short_name(assign.to_sym)
+					end
 				end
 			end
 			
-			# raise DuplicateParameterDefinitionError.new(duplicate_short_names + duplicate_long_names) if (duplicate_short_names + duplicate_long_names).any?
+			mapped_params = mapped_params.to_h
+			mapped_short_names = parameters.select { |p| !p.__short_name.nil? }.map { |p| [p.__short_name, p] }.to_h
 			
-			
-			# Automatically flip if parameter name starts with no_
-			# starts with is_
-			# starts with no_
-			# [:no, :dont, :both]
-			# infer only if not defined
-			
+			puts("--- long ---")
+			mapped_params.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
+			puts("--- short ---")
+			mapped_short_names.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
 			
 			nil
 		end
@@ -291,12 +410,19 @@ module KLib
 		end
 		
 		class DuplicateParameterDefinitionError < RuntimeError
-			
+			attr_reader :parameters
 			def initialize(parameters)
 				@parameters = parameters
 				super("Found duplicate parameter definitions: #{parameters.inspect}")
 			end
-			
+		end
+		
+		class NonExistentParameterDefinitionError < RuntimeError
+			attr_reader :parameters
+			def initialize(parameters)
+				@parameters = parameters
+				super("Found defintions for parameters that dont exist: #{parameters.inspect}")
+			end
 		end
 		
 		
@@ -336,6 +462,7 @@ module KLib
 					
 					@param_name = param_name
 					@short_name = nil
+					@base_name = param_name.to_s
 					
 					@min_args = 1
 					@max_args = 1
@@ -375,28 +502,25 @@ module KLib
 				end
 				
 				def boolean_mode(mode)
-					::KLib::ArgumentChecking.enum_check(mode, 'mode', :is_isnt, :_isnt, :do_dont, :_dont, :_no)
+					::KLib::ArgumentChecking.enum_check(mode, 'mode', :is_isnt, :_isnt, :do_dont, :_dont, :yes_no, :_no)
 					
 					@boolean_mode = mode
-					self
+					arg_type(:boolean)
 				end
 				
 				def boolean_flip(value)
 					::KLib::ArgumentChecking.boolean_check(value, 'value')
 					
 					@boolean_flip = value
-					self
+					arg_type(:boolean)
 				end
 				
 				def arg_type(type)
 					::KLib::ArgumentChecking.enum_check(type, 'type', :string, :boolean, :integer, :float)
 					
+					accepts(0, 0) if type == :boolean
 					@arg_type = type
 					self
-				end
-				
-				def alias
-					raise 'TO-DO'
 				end
 				
 				def explain(*messages)
@@ -412,6 +536,14 @@ module KLib
 				
 				def __short_name
 					@short_name
+				end
+				
+				def __base_name= (base)
+					@base_name = base
+				end
+				
+				def __base_name
+					@base_name
 				end
 				
 				def __min_args
@@ -442,8 +574,12 @@ module KLib
 					nil
 				end
 				
+				def __messages
+					@explain
+				end
+				
 				def inspect
-					"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
+					"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], boolean_mode: [#{@boolean_mode.inspect}], boolean_flip: [#{@boolean_flip.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
 				end
 				alias :to_s :inspect
 			
@@ -468,16 +604,13 @@ module TestMod
 	end
 	
 	method_spec(:main) do |s|
-		s.param(:last_name)
-		s.param(:first_name).accepts(2, 3).short_name(:a)
-		s.param(:is_cool).arg_type(:boolean)
+		s.param(:is_fun).short_name(:i)
 	end
 	
-	def self.main(first_name, last_name, age, is_cool, isnt_dumb, is_fun, island)
-		puts("I have been called: #{[first_name, last_name, age].inspect}")
+	def self.main(is_fun, dont_print, isnt_cool, puts, printing)
 	end
 	
 end
 
 $stderr = $stdout
-TestMod.parse(%w{--f Morena --l Iriart --a 19})
+TestMod.parse()
