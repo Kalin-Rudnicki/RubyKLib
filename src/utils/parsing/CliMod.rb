@@ -216,18 +216,28 @@ module KLib
 			parameters += (method_info[:names] - parameters.map { |p| p.__param_name }).map { |p| MethodSpec::ParamSpec.new(p) }
 			parameters.each { |p| puts p.inspect }
 			
-			booleans = parameters.select { |p| p.__arg_type == :boolean }
+			booleans, non_booleans = parameters.partition do |p|
+				p.__arg_type == :boolean || (p.__arg_type == nil && %w{is isnt do dont}.any? { |start| p.__param_name.to_s.start_with?("#{start}_") })
+			end
+			puts("booleans:     #{booleans.map { |p| p.__param_name }.inspect}")
+			puts("non_booleans: #{non_booleans.map { |p| p.__param_name }.inspect}")
 			
-			puts parameters.map { |p| p.__param_name }.inspect
-			puts booleans.map { |p| p.__param_name }.inspect
+			booleans.each do |bool|
+				bool.arg_type(:boolean)
+				if bool.__boolean_mode.nil?
+					# flip, starts with?
+				end
+			end
 			
-			names = parameters.map { |p| p.__arg_type == :boolean ? [[p.__param_name, p], [:"no_#{p.__param_name}", p]] : [[p.__param_name, p]] }.flatten(1)
-			duplicate_long_names = names.map { |p| p[0] }.duplicates
+			# raise DuplicateParameterDefinitionError.new(duplicate_short_names + duplicate_long_names) if (duplicate_short_names + duplicate_long_names).any?
 			
-			short_names = parameters.map { |p| [p.__short_name, p] }.select { |s| !s[0].nil? }
-			puts short_names.map { |p| p[0] }.inspect
 			
-			raise DuplicateParameterDefinitionError.new(duplicate_long_names) if duplicate_long_names.any?
+			# Automatically flip if parameter name starts with no_
+			# starts with is_
+			# starts with no_
+			# [:no, :dont, :both]
+			# infer only if not defined
+			
 			
 			nil
 		end
@@ -330,7 +340,10 @@ module KLib
 					@min_args = 1
 					@max_args = 1
 					
-					@arg_type = :string
+					@arg_type = nil
+					
+					@boolean_mode = nil
+					@boolean_flip = nil
 					
 					@on_missing = :required
 					@on_zero = nil
@@ -361,10 +374,25 @@ module KLib
 					self
 				end
 				
+				def boolean_mode(mode)
+					::KLib::ArgumentChecking.enum_check(mode, 'mode', :is_isnt, :_isnt, :do_dont, :_dont, :_no)
+					
+					@boolean_mode = mode
+					self
+				end
+				
+				def boolean_flip(value)
+					::KLib::ArgumentChecking.boolean_check(value, 'value')
+					
+					@boolean_flip = value
+					self
+				end
+				
 				def arg_type(type)
 					::KLib::ArgumentChecking.enum_check(type, 'type', :string, :boolean, :integer, :float)
 					
 					@arg_type = type
+					self
 				end
 				
 				def alias
@@ -373,7 +401,9 @@ module KLib
 				
 				def explain(*messages)
 					::KLib::ArgumentChecking.type_check_each(messages, 'messages', ::String)
+					
 					@explain = messages
+					self
 				end
 				
 				def __param_name
@@ -390,6 +420,14 @@ module KLib
 				
 				def __max_args
 					@max_args
+				end
+				
+				def __boolean_mode
+					@boolean_mode
+				end
+				
+				def __boolean_flip
+					@boolean_flip
 				end
 				
 				def __arg_type
@@ -435,7 +473,7 @@ module TestMod
 		s.param(:is_cool).arg_type(:boolean)
 	end
 	
-	def self.main(first_name, last_name, age, is_cool)
+	def self.main(first_name, last_name, age, is_cool, isnt_dumb, is_fun, island)
 		puts("I have been called: #{[first_name, last_name, age].inspect}")
 	end
 	
