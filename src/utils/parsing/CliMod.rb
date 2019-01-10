@@ -338,16 +338,16 @@ module KLib
 			
 			# Check for duplicate definitions, due to the additions of is/no/...
 			
-			duplicate_param_mappings = ([:help] + mapped_params.map { |p| p[0] }).duplicates
+			duplicate_param_mappings = ([:help, :help_extra] + mapped_params.map { |p| p[0] }).duplicates
 			
 			defined_short_names = parameters.map { |p| p.__short_name }.select { |p| !p.nil? }
-			duplicate_short_names = ([:h] + defined_short_names).duplicates
+			duplicate_short_names = ([:h, :H] + defined_short_names).duplicates
 			
 			raise DuplicateParameterDefinitionError.new(duplicate_param_mappings + duplicate_short_names) if (duplicate_param_mappings + duplicate_short_names).any?
 			
 			# Add short names where possible
 			
-			used_short_names = [:h] + defined_short_names
+			used_short_names = [:h, :H] + defined_short_names
 			
 			by_base_name_start = Hash.new { |h, k| h[k] = [] }
 			parameters.select { |p| p.__short_name.nil? }.each { |p| by_base_name_start[p.__base_name[0].downcase] << p }
@@ -375,12 +375,43 @@ module KLib
 				end
 			end
 			
+			# Check for helps
 			
+			if args.any? { |arg| (arg.type == :short_key && arg.value == :H) || (arg.type == :long_key && arg.value == :help_extra) }
+				method_help_extra(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+			elsif args.any? { |arg| (arg.type == :short_key && arg.value == :h) || (arg.type == :long_key && arg.value == :help) }
+				method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+			end
 			
-			puts('--- short ---')
-			short_name_mappings.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
-			puts('--- long ---')
-			mapped_params.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
+			# Parse arguments
+			
+			used_parameters = Set.new
+			
+			param_values = parameters.map_to_h(:mode => :key) { nil }
+			rest = !method_info[:rest].nil?
+			
+			puts(method_info[:rest].inspect)
+			puts(method_info.inspect)
+			puts('--- args ---')
+			args.each { |arg| puts arg.inspect }
+			
+			if args.any? { |a| a.type != :arg }
+				current_param = nil
+				current_values = nil
+				
+				# Some sort of queuing and placing
+				# This is where -d/-D needs to be figured out
+				# error out as soon as you try and put an arg into a boolean
+				# the put only happens when you see a key, so as to allow removal of 'rests' at the end
+				
+				if rest
+				
+				end
+			else
+				if rest
+				
+				end
+			end
 			
 			nil
 		end
@@ -392,8 +423,11 @@ module KLib
 			str
 		end
 		
-		def method_help(param_names, long_mappings, short_mappings, exit_code = nil)
-			raise 'todo'
+		def method_help(method_name, param_names, long_mappings, short_mappings, exit_code = nil)
+			str = 'TO-DO: MethodHelp'
+			$stderr.puts(str)
+			exit(exit_code) unless exit_code.nil?
+			str
 		end
 		
 		def help_extra(exit_code = nil)
@@ -403,8 +437,11 @@ module KLib
 			str
 		end
 		
-		def method_help_extra(param_names, long_mappings, short_mappings, exit_code = nil)
-			raise 'todo'
+		def method_help_extra(method_name, param_names, long_mappings, short_mappings, exit_code = nil)
+			str = 'TO-DO: MethodHelpExtra'
+			$stderr.puts(str)
+			exit(exit_code) unless exit_code.nil?
+			str
 		end
 		
 		
@@ -619,11 +656,20 @@ module KLib
 					@explain
 				end
 				
+				
 				def inspect
 					"{ParamSpec} { param_name: [#{@param_name.inspect}], short_name: [#{@short_name.inspect}], boolean_mode: [#{@boolean_mode.inspect}], boolean_flip: [#{@boolean_flip.inspect}], min_args: [#{@min_args.inspect}], max_args: [#{@max_args.inspect}], arg_type: [#{@arg_type.inspect}], default: [#{@default.inspect}], values: [#{@values.inspect}] }"
 				end
 				alias :to_s :inspect
 			
+				def hash
+					__id__
+				end
+				
+				def eql?(other)
+					self.hash == other.hash
+				end
+				
 			end
 		
 		end
@@ -652,7 +698,7 @@ module TestMod
 		s.param(:ranking).short_name(:g)
 	end
 	
-	def self.main(is_fun, dont_print, isnt_cool, yes_jump, puts, printing, relax, ranking)
+	def self.main(is_fun, dont_print, isnt_cool, yes_jump, puts, printing, relax, ranking, *args)
 	end
 	
 	def self.print_person(a)
@@ -663,4 +709,4 @@ end
 
 $stderr = $stdout
 
-TestMod.parse(%w{})
+TestMod.parse(%w{main a b c})
