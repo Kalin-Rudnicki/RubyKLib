@@ -23,9 +23,12 @@ module KLib
 		def parse(args = ARGV)
 			ArgumentChecking.type_check_each(args, 'args', String)
 			
-			if args.length == 1 && (args.first == '--help' || args.first == '-h')
-				$stdout.puts(help)
-				exit(0)
+			if args.length == 1
+				if args.first == '--help' || args.first == '-h'
+					help(0)
+				elsif args.first == '--help-extra' || args.first == '-h'
+					help_extra(0)
+				end
 			end
 			
 			# === Settings ===
@@ -59,8 +62,7 @@ module KLib
 					return @valid_mods[given].parse(remaining_args)
 				else
 					$stderr.puts("[FATAL]:   No method or mod '#{given}'")
-					$stderr.puts(help)
-					exit(1)
+					help(1)
 				end
 			else
 				if @valid_methods.key?(:main)
@@ -70,14 +72,12 @@ module KLib
 					if help_messages
 						$stderr.puts("[INFO]:    To set a default method... #{self}.default_method(:method_name) or define 'main'")
 					end
-					$stderr.puts(help)
-					exit(1)
+					help(1)
 				elsif @valid_methods.key?(@default_method)
 					return call_handler(@default_method, args)
 				else
 					$stderr.puts("[FATAL]:   No such method named '#{method_name}'")
-					$stderr.puts(help)
-					exit(1)
+					help(1)
 				end
 			end
 		end
@@ -207,10 +207,14 @@ module KLib
 			ArgumentChecking.type_check(method_name, 'method_name', Symbol)
 			ArgumentChecking.type_check_each(original_args, 'original_args', String)
 			
+			# get method data
+			
 			args = original_args.map { |arg| Argument.new(arg) }
 			method_info = @valid_methods[method_name]
 			@method_specs ||= {}
 			method_spec = @method_specs.key?(method_name) ? @method_specs[method_name] : MethodSpec.new(method_name)
+			
+			# Figure out info about parameters
 			
 			parameters = method_spec.__params.values
 			
@@ -244,6 +248,8 @@ module KLib
 				end
 			end
 			non_booleans.each { |p| p.arg_type(:string) if p.__arg_type.nil? }
+			
+			# Map parameters based on name, with special info about booleans
 			
 			mapped_params = parameters.map do |param|
 				if param.__arg_type == :boolean
@@ -330,6 +336,8 @@ module KLib
 				end
 			end.flatten(1)
 			
+			# Check for duplicate definitions, due to the additions of is/no/...
+			
 			duplicate_param_mappings = ([:help] + mapped_params.map { |p| p[0] }).duplicates
 			
 			defined_short_names = parameters.map { |p| p.__short_name }.select { |p| !p.nil? }
@@ -337,38 +345,68 @@ module KLib
 			
 			raise DuplicateParameterDefinitionError.new(duplicate_param_mappings + duplicate_short_names) if (duplicate_param_mappings + duplicate_short_names).any?
 			
+			# Add short names where possible
+			
 			used_short_names = [:h] + defined_short_names
 			
 			by_base_name_start = Hash.new { |h, k| h[k] = [] }
 			parameters.select { |p| p.__short_name.nil? }.each { |p| by_base_name_start[p.__base_name[0].downcase] << p }
 			
-			by_base_name_start.each_pair do |start, using_start|
-				([start.downcase, start.upcase] - used_short_names).each do |assign|
-					if using_start.any?
-						using_start.shift.short_name(assign.to_sym)
+			mapped_params = mapped_params.to_h
+			short_name_mappings = {}
+			booleans.each do |param|
+				needed = [param.__base_name[0].downcase.to_sym, param.__base_name[0].upcase.to_sym] - used_short_names
+				if needed.length == 2
+					used_short_names += needed
+					short_name_mappings[needed[0]] = { :param => param, :bool => !param.__boolean_flip }
+					short_name_mappings[needed[1]] = { :param => param, :bool => param.__boolean_flip }
+				end
+			end
+			non_booleans.each do |param|
+				if param.__short_name.nil?
+					opts = [param.__base_name[0].downcase.to_sym, param.__base_name[0].upcase.to_sym] - used_short_names
+					if opts.any?
+						opt = opts.shift
+						used_short_names << opt
+						short_name_mappings[opt] = { :param => param, :bool => nil }
 					end
+				else
+					short_name_mappings[param.__short_name] = { :param => param, :cool => nil }
 				end
 			end
 			
-			mapped_params = mapped_params.to_h
-			mapped_short_names = parameters.select { |p| !p.__short_name.nil? }.map { |p| [p.__short_name, p] }.to_h
 			
-			puts("--- long ---")
+			
+			puts('--- short ---')
+			short_name_mappings.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
+			puts('--- long ---')
 			mapped_params.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
-			puts("--- short ---")
-			mapped_short_names.each_pair { |k, v| puts("#{k.inspect} => #{v.inspect}") }
 			
 			nil
 		end
 		
-		def help
-			"TO-DO: Help"
+		def help(exit_code = nil)
+			str = 'TO-DO: Help'
+			$stderr.puts(str)
+			exit(exit_code) unless exit_code.nil?
+			str
 		end
 		
-		def method_help(method_name)
-			ArgumentChecking.type_check(method_name, 'method_name', Symbol)
-			"TO-DO: MethodHelp => #{method_name.inspect}"
+		def method_help(param_names, long_mappings, short_mappings, exit_code = nil)
+			raise 'todo'
 		end
+		
+		def help_extra(exit_code = nil)
+			str = 'TO-DO: HelpExtra'
+			$stderr.puts(str)
+			exit(exit_code) unless exit_code.nil?
+			str
+		end
+		
+		def method_help_extra(param_names, long_mappings, short_mappings, exit_code = nil)
+			raise 'todo'
+		end
+		
 		
 		class Argument
 			
@@ -518,7 +556,10 @@ module KLib
 				def arg_type(type)
 					::KLib::ArgumentChecking.enum_check(type, 'type', :string, :boolean, :integer, :float)
 					
-					accepts(0, 0) if type == :boolean
+					if type == :boolean
+						accepts(0, 0)
+						@short_name = nil
+					end
 					@arg_type = type
 					self
 				end
@@ -601,16 +642,25 @@ module TestMod
 			puts(database_name.inspect)
 		end
 		
+		def self.print_person
+		
+		end
+		
 	end
 	
 	method_spec(:main) do |s|
-		s.param(:is_fun).short_name(:i)
+		s.param(:ranking).short_name(:g)
 	end
 	
-	def self.main(is_fun, dont_print, isnt_cool, puts, printing)
+	def self.main(is_fun, dont_print, isnt_cool, yes_jump, puts, printing, relax, ranking)
+	end
+	
+	def self.print_person(a)
+	
 	end
 	
 end
 
 $stderr = $stdout
-TestMod.parse()
+
+TestMod.parse(%w{})
