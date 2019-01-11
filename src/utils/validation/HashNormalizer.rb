@@ -273,17 +273,17 @@ module KLib
 					# Do argument checking
 					found_args.each_pair do |arg, from_key|
 						arg.checks.each_pair do |method, value|
-							ArgumentChecking.send(method, source[from_key], hash_args[:name_proc].call(from_key), value)
+							ArgumentChecking.send(method, source[from_key], hash_args[:name_proc].call(from_key), *value)
 						end
 					end
 					non_found_partition[:default_value].each do |arg|
 						arg.checks.each_pair do |method, value|
-							ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", value)
+							ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
 						end
 					end
 					non_found_partition[:default_from_key].each do |arg|
 						arg.checks.each_pair do |method, value|
-							ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", value)
+							ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
 						end
 					end
 					
