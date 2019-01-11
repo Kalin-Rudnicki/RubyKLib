@@ -387,16 +387,13 @@ module KLib
 			
 			used_parameters = Set.new
 			
+			long_names = mapped_params.keys.map { |k| k.to_s }
 			param_values = parameters.map_to_h(:mode => :key) { nil }
 			rest = !method_info[:rest].nil?
 			
-			puts(method_info[:rest].inspect)
-			puts(method_info.inspect)
-			puts('--- args ---')
-			args.each { |arg| puts arg.inspect }
-			
 			if args.any? { |a| a.type != :arg }
-				current_param = nil
+				in_bool = nil
+				current_params = nil
 				current_values = nil
 				
 				# Some sort of queuing and placing
@@ -404,14 +401,125 @@ module KLib
 				# error out as soon as you try and put an arg into a boolean
 				# the put only happens when you see a key, so as to allow removal of 'rests' at the end
 				
-				if rest
+				args.each do |arg|
+					case arg.type
+						when :arg
+							if current_params.nil?
+								$stderr.puts("No parameter for '#{arg.value}' to belong to...")
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+							else
+								current_values << arg.value
+							end
+						when :short_key
+							if arg.value.include?(:H)
+								method_help_extra(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+							elsif arg.value.include?(:h)
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+							end
+							specified_params = arg.value.map_to_h(:mode => :key) { |s| short_name_mappings[s] }
+							invalid_params = specified_params.select { |k, v| v.nil? }.keys
+							if invalid_params.any?
+								$stderr.puts("No such parameters: #{invalid_params.map { |p| "-#{p[0]}" }.join(', ')}")
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+							end
+							bools = specified_params.select { |k, v| !v[:bool].nil? }
+							non_bools = specified_params.select { |k, v| v[:bool].nil? }
+							if bools.any? && non_bools.any?
+								$stderr.puts("You can not specify boolean and non-boolean parameters together:")
+								$stderr.puts("booleans:     #{bools.keys.map { |k| "-#{k}" }.join(', ')}")
+								$stderr.puts("non_booleans: #{non_bools.keys.map { |k| "-#{k}" }.join(', ')}")
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+							end
+							unless current_params.nil?
+								if in_bool && current_values.any?
+									$stderr.puts("You can not specify arguments on boolean parameters:")
+									$stderr.puts("params:    #{current_params.map { |p| "-#{p}" }.join(', ')}")
+									$stderr.puts("arguments: #{current_values.map { |v| "'#{v}'" }.join(', ')}")
+									method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+								else
+									current_params.each { |v| param_values[v] = current_values }
+								end
+							end
+							current_values = []
+							if bools.any?
+								in_bool = true
+								current_params = bools.keys
+								bools.each_value { |v| param_values[v[:param]] = v[:bool] }
+							elsif  non_bools.any?
+								in_bool = false
+								if non_bools.size > 1
+									$stderr.puts("You can not specify multiple non-boolean parameters at the same time:")
+									$stderr.puts("params: #{non_bools.keys.map { |p| "-#{p}" }.join(', ')}")
+									method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+								else
+									current_params = non_bools.values.map { |p| p[:param] }
+								end
+							else
+								raise 'what is going on...'
+							end
+						when :long_key
+							if arg.value == :help_extra
+								method_help_extra(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+							elsif arg.value == :help
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 0)
+							end
+							unless current_params.nil?
+								if in_bool && current_values.any?
+									$stderr.puts("You can not specify arguments on boolean parameters:")
+									$stderr.puts("params:    #{current_params.map { |p| "-#{p}" }.join(', ')}")
+									$stderr.puts("arguments: #{current_values.map { |v| "'#{v}'" }.join(', ')}")
+									method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+								else
+									unless in_bool
+										current_params.each { |v| param_values[v] = current_values }
+									end
+								end
+							end
+							found = GnuMatch.multi_match(arg.value.to_s, long_names)
+							if found.nil?
+								$stderr.puts("Could not match: --#{arg.value.to_s.gsub('_', '-')}")
+								method_help(method_name, method_info[:names], mapped_params, short_name_mappings, 1)
+							else
+								found = mapped_params[found.to_sym]
+								current_values = []
+								if found[:bool].nil?
+									in_bool = false
+									current_params = [found[:param]]
+								else
+									in_bool = true
+									param_values[found[:param]] = found[:bool]
+									current_params = found.to_sym
+								end
+							end
+						else
+							raise 'what is going on...'
+					end
+				end
 				
+				if rest && !current_params.nil?
+					if in_bool
+						rest = current_values
+					else
+						rest = []
+						rest << current_values.pop while current_values.length > current_params.first.__max_args
+						param_values[current_params.first] = current_values
+					end
 				end
 			else
 				if rest
-				
+					rest = args.map { |arg| arg.value }
 				end
 			end
+			rest = [] if rest.nil?
+			
+			by_name = param_values.transform_keys { |k| k.__param_name }
+			
+			puts("values:")
+			param_values.each_pair { |k, v| puts("\t#{k.__param_name.inspect} => #{v.inspect}") }
+			puts("rest: #{rest.inspect}")
+			puts
+			
+			method_info[:method].call(*method_info[:names].map { |n| by_name[n] }, *rest)
 			
 			nil
 		end
@@ -681,32 +789,24 @@ end
 module TestMod
 	extend KLib::CliMod
 	
-	module Compile
-		extend KLib::CliMod
-		
-		def self.new(database_name)
-			puts(database_name.inspect)
-		end
-		
-		def self.print_person
-		
-		end
-		
-	end
-	
 	method_spec(:main) do |s|
 		s.param(:ranking).short_name(:g)
 	end
 	
 	def self.main(is_fun, dont_print, isnt_cool, yes_jump, puts, printing, relax, ranking, *args)
+		puts('called main')
 	end
 	
-	def self.print_person(a)
-	
+	def self.print_person(first_name, last_name, last_fun, is_cool, *args)
+		puts("first_name: #{first_name.inspect}")
+		puts("last_name: #{last_name.inspect}")
+		puts("last_fun: #{last_fun.inspect}")
+		puts("is_cool: #{is_cool.inspect}")
+		puts("*args: #{args.inspect}")
 	end
 	
 end
 
 $stderr = $stdout
 
-TestMod.parse(%w{main a b c})
+TestMod.parse
