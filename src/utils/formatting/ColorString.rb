@@ -19,8 +19,8 @@ module KLib
 				COLOR_MODE = :none
 			end
 		else
-			$stderr.puts("[INFO]:    No 'KLIB_COLOR' environment variable set, assuming 'NONE'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
-			COLOR_MODE = :none
+			$stderr.puts("[INFO]:    No 'KLIB_COLOR' environment variable set, assuming 'BASIC'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
+			COLOR_MODE = :basic
 		end
 		
 		COLORS = {
