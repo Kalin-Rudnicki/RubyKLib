@@ -9,6 +9,19 @@ module KLib
 	
 		INTER_STRING = '#{}'
 		CLEAR_COLORS = "\e[0m"
+		VALID_COLOR_MODES = [:basic, :none]
+		if ENV.key?('KLIB_COLOR')
+			value = ENV['KLIB_COLOR'].downcase.to_sym
+			if VALID_COLOR_MODES.include?(value)
+				COLOR_MODE = value
+			else
+				$stderr.puts("[WARNING]: 'KLIB_COLOR' environment variable has bad value '#{ENV['KLIB_COLOR']}', assuming 'NONE'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
+				COLOR_MODE = :none
+			end
+		else
+			$stderr.puts("[INFO]:    No 'KLIB_COLOR' environment variable set, assuming 'NONE'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
+			COLOR_MODE = :none
+		end
 		
 		COLORS = {
 			:black =>   { :foreground => 30, :background => 40 },
@@ -72,7 +85,7 @@ module KLib
 			end
 			str << modifiers.to_s << split_string[-1] <<  CLEAR_COLORS
 			
-			@str = str
+			@str = COLOR_MODE == :none ? str.gsub(/\e\[(\d+)(;\d+)*m/, '') : str
 		end
 		
 		def to_s
