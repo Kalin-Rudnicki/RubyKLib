@@ -1,6 +1,6 @@
 
 Dir.chdir(File.dirname(__FILE__)) do
-	require './../../../src/utils/formatting/StringCasing'
+	require './../../../src/utils/formatting/CaseConversion'
 end
 
 if File.expand_path(__FILE__ ) == File.expand_path($0)

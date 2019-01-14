@@ -2,7 +2,7 @@
 Dir.chdir(File.dirname(__FILE__)) do
 	require 'set'
 	require './ArgumentChecking'
-	require './../formatting/StringCasing'
+	require './../formatting/CaseConversion'
 	require './../version_compat/BasicObject'
 end
 
@@ -153,6 +153,16 @@ module KLib
 				
 				def respond_to_check(*required_args)
 					@settings[:checks][:respond_to_check] = required_args
+					self
+				end
+				
+				def boolean_check
+					@settings[:checks][:boolean_check] = []
+					self
+				end
+				
+				def nil_check
+					@settings[:checks][:nil_check] = []
 					self
 				end
 				
