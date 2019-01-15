@@ -135,7 +135,7 @@ module KLib
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:never, :blue)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:debug, :cyan)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:detailed, :green)
-		DEFAULT_LOG_LEVEL_MANAGER.color_level(:info, :yellow)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:info, :green)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:print, :default)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:important, :yellow)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:warning, :yellow)
@@ -306,7 +306,7 @@ module KLib
 					
 					def build
 						str = "#{@str}] "
-						return str, "[#{' ' * (str.length - 3)}] "
+						return str, "[#{' ' * (str.gsub(/\e\[(\d+)(;\d+)*m/, '').length - 3)}] "
 					end
 					
 				end
