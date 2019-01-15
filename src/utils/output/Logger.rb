@@ -118,7 +118,7 @@ module KLib
 			
 		end
 		
-		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :error, :fatal, :always, :off)
+		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :warning, :error, :fatal, :always, :off)
 		
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:never, :NEVER)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:debug, :DEBUG)
@@ -127,6 +127,7 @@ module KLib
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:print, :PRINT)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:important, :IMPRT)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:error, :ERROR)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:warning, :WARN)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:fatal, :FATAL)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:always, :ALWYS)
 		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:off, :OFF)
@@ -137,6 +138,7 @@ module KLib
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:info, :yellow)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:print, :default)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:important, :yellow)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:warning, :yellow)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:error, :red)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:fatal, :red)
 		DEFAULT_LOG_LEVEL_MANAGER.color_level(:always, :default)
