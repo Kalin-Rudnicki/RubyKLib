@@ -22,7 +22,7 @@ module KLib
 		
 		def method_spec(method_name, &block)
 			@method_specs  = {} unless self.instance_variable_defined?(:@method_specs)
-			@method_specs[method_name] = nil
+			@method_specs[method_name] = MethodSpec.new(method_name, &block)
 			$cli_log.log(:debug, "method_spec_keys: #{@method_specs.keys.inspect}", :rule => :random)
 		end
 		
@@ -111,7 +111,69 @@ module KLib
 		private
 			
 			def call_handler(method_name, args)
-			
+				ArgumentChecking.type_check(method_name, 'method_name', Symbol)
+				ArgumentChecking.type_check_each(args, 'args', Argument)
+				
+				$cli_log.log(:info, "Called '#{method_name}' with args #{args.map { |arg| arg.original }.inspect}")
+				
+				method_info = @valid_methods[method_name]
+				$cli_log.log(:info, "MethodInfo: #{method_info.inspect}")
+				
+				@method_specs ||= {}
+				unless @method_specs.key?(method_name)
+					@method_specs[method_name] = MethodSpec.new(method_name) {}
+				end
+				method_spec = @method_specs[method_name]
+				
+				$cli_log.log(:info, "Defined parameters: #{method_spec.parameters.keys.inspect}")
+				
+				non_existent_parameters = method_spec.parameters.keys - method_info[:names]
+				raise NonExistentParametersError.new(non_existent_parameters) if non_existent_parameters.any?
+				
+				(method_info[:names] - method_spec.parameters.keys).each { |p| method_spec.param(p.to_sym) }
+				
+				$cli_log.log(:info, "Defined parameters: #{method_spec.parameters.keys.inspect}")
+				
+				# Find default
+				method_spec.parameters.values.select { |param| param.__type.nil? }.each do |param|
+					if %w{isnt is dont do no yes}.any? { |start| param.long_name.start_with?("#{start}_") }
+						param.type(:boolean)
+					elsif %w{arr array}.any? { |start| param.long_name.split('_').include?(start) }
+						param.type(:array)
+					elsif %w{hash}.any? { |start| param.long_name.split('_').include?(start) }
+						param.type(:hash)
+					else
+						param.type(:string)
+					end
+				end
+				
+				method_spec.parameters.values.select { |param| param.__type == :boolean }.each do |param|
+					if param.__boolean_data.nil?
+						if param.long_name.start_with?('isnt_')
+							param.boolean_data(:mode => :_isnt, :flip => true)
+						elsif param.long_name.start_with?('is_')
+							param.boolean_data(:mode => :is_isnt, :flip => false)
+						elsif param.long_name.start_with?('dont_')
+							param.boolean_data(:mode => :_dont, :flip => true)
+						elsif param.long_name.start_with?('do_')
+							param.boolean_data(:mode => :do_dont, :flip => false)
+						elsif param.long_name.start_with?('no_')
+							param.boolean_data(:mode => :_no, :flip => true)
+						elsif param.long_name.start_with?('yes_')
+							param.boolean_data(:mode => :yes_no, :flip => false)
+						else
+							param.boolean_data(:mode => :_no, :flip => false)
+						end
+					end
+					$cli_log.log(:info, "split: #{param.__boolean_data[:mode].to_s.split('_').inspect}")
+					param.__boolean_data[:mode].to_s.split('_').select { |s| s.length > 0 }.each do |start|
+						if param.long_name.start_with?("#{start}_")
+							param.instance_variable_set(:@base_name, param.long_name[(start.length + 1)..-1])
+						end
+					end
+					$cli_log.log(:info, "Bool: long => '#{param.long_name}', base => '#{param.base_name}' data => #{param.__boolean_data.inspect}")
+				end
+				
 			end
 			
 			def find_valid_methods
@@ -151,7 +213,7 @@ module KLib
 					valid_methods[met] = {
 						:name => met.to_s,
 						:method => method,
-						:names => method.parameters.select { |p| p[0] == :req }.map { |p| p[1] },
+						:names => method.parameters.select { |p| p[0] == :req }.map { |p| p[1].to_s },
 						:rest => rest
 					}
 				end
@@ -208,6 +270,110 @@ module KLib
 				$cli_log.log(:info, "\nTODO: MethodHelpExtra")
 				exit(-1)
 			end
+			
+		class NonExistentParametersError < RuntimeError
+			attr_reader :params
+			def initialize(params)
+				@params = params
+				super("Found parameter definitions for params that dont exist in method: #{params.join(', ')}")
+			end
+		end
+			
+		class MethodSpec
+			
+			attr_reader :parameters, :method_name
+			
+			def initialize(method_name, &block)
+				raise ArgumentError.new("You must supply a block to this method.") unless block_given?
+				@method_name = method_name
+				@parameters = {}
+				
+				block.call(self)
+			end
+			
+			def param(param_name)
+				ArgumentChecking.type_check(param_name, 'param_name', Symbol)
+				raise AlreadyDefinedParameterError.new(param_name) if @parameters.key?(param_name)
+				@parameters[param_name.to_s] = ParameterSpec.new(param_name)
+			end
+			
+			class ParameterSpec
+				
+				attr_reader :convert, :long_name, :on_missing, :min_args, :short_name, :max_args, :on_zero, :comments, :base_name
+				
+				def initialize(param_name)
+					ArgumentChecking.type_check(param_name, 'param_name', Symbol)
+					StringCasing.matches?(param_name.to_s, :snake, :behavior => :error, :nums => true)
+					
+					@long_name = param_name.to_s
+					@short_name = nil
+					@base_name = @long_name
+					
+					@type = nil
+					
+					@boolean_data = nil
+					
+					@min_args = 1
+					@max_args = 1
+					
+					@on_missing = nil
+					@on_zero = nil
+					
+					@convert = nil
+					
+					@comments = []
+				end
+				
+				def type(type)
+					ArgumentChecking.enum_check(type, 'type', :string, :boolean, :int, :float, :array, :hash)
+					@type = type
+					self
+				end
+				
+				def boolean_data(hash_args)
+					hash_args = HashNormalizer.normalize(hash_args) do |norm|
+						norm.mode.enum_check(:is_isnt, :_isnt, :do_dont, :_dont, :yes_no, :_no)
+						norm.flip.boolean_check
+					end
+					@type = :boolean
+					@boolean_data = hash_args
+				end
+				
+				def accepts(min_args, max_args)
+					ArgumentChecking.type_check(min_args, 'min_args', Integer)
+					ArgumentChecking.type_check(max_args, 'max_args', NilClass, Integer)
+					raise ArgumentError.new("min_args must be >= 0, given: #{min_args.inspect}") if min_args < 0
+					raise ArgumentError.new("max_args must be nil or >= min_args, given: #{max_args.inspect}") if !max_args.nil? && max_args < min_args
+					@min_args = min_args
+					@max_args = max_args
+					self
+				end
+				
+				def comment(*messages)
+					ArgumentChecking.type_check_each(messages, 'messages', String)
+					@comments = messages
+					self
+				end
+				
+				def __boolean_data
+					@boolean_data
+				end
+				
+				def __type
+					@type
+				end
+				
+			end
+			
+			class AlreadyDefinedParameterError < RuntimeError
+				attr_reader :param_name
+				def initialize(param_name)
+					@param_name = param_name
+					super("Already defined parameter '#{param_name}'")
+				end
+			end
+		
+		end
 		
 		class Argument
 			

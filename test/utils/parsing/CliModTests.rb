@@ -6,26 +6,16 @@ end
 module Test
 	extend KLib::CliMod
 
-	def self.main(first_name, last_name, age)
-	
+	method_spec(:main) do |spec|
+		spec.param(:first_name)
+		spec.param(:dont_kill).boolean_data(:mode => :do_dont, :flip => true)
 	end
 	
-	def self.yatch(a)
+	def self.main(first_name, last_name, age, is_cool, dont_kill)
 	
-	end
-	
-	module Main
-		extend KLib::CliMod
-	end
-	
-	module YaMan
-		extend KLib::CliMod
-	end
-	
-	module Yass
-		extend KLib::CliMod
 	end
 	
 end
 
-Test.parse(%w{ya-m --test ok --why -abc -AF})
+$stderr = $stdout
+Test.parse(%w{main --first-name})
