@@ -23,7 +23,6 @@ module KLib
 		def method_spec(method_name, &block)
 			@method_specs  = {} unless self.instance_variable_defined?(:@method_specs)
 			@method_specs[method_name] = MethodSpec.new(method_name, &block)
-			$cli_log.log(:debug, "method_spec_keys: #{@method_specs.keys.inspect}", :rule => :random)
 		end
 		
 		def parse(args = ARGV)
@@ -32,9 +31,6 @@ module KLib
 			
 			@valid_mods = find_valid_mods
 			valid_mod_names = @valid_mods.values.map { |mod| mod[:name] }.sort
-			
-			$cli_log.log(:info, "valid_methods: #{valid_method_names.inspect}")
-			$cli_log.log(:info, "valid_mods: #{valid_mod_names.inspect}")
 			
 			begin
 				ArgumentChecking.type_check_each(args, 'args', Argument)
@@ -65,11 +61,6 @@ module KLib
 				end
 			end
 			
-			$cli_log.log(:debug, "--- Arguments ---", :rule => :args)
-			$cli_log.indent + 1
-			mapped_args.each { |arg| $cli_log.log(:debug, arg.to_s, :rule => :args) }
-			$cli_log.indent - 1
-			
 			if mapped_args.length > 0
 				if mapped_args[0].type == :arg && Regexes::NAME_REGEX.match?(mapped_args[0].value)
 					name = mapped_args[0].value.tr('-', '_')
@@ -80,10 +71,6 @@ module KLib
 					mod_matches = $gnu_matches.map { |m| [m, :mod] }
 					
 					matches = method_matches + mod_matches
-					
-					$cli_log.log(:detailed, "MethodMatches: #{method_matches.map { |m| m[0] }.inspect}")
-					$cli_log.log(:detailed, "ModMatches: #{mod_matches.map { |m| m[0] }.inspect}")
-					$cli_log.log(:detailed, "Matches: #{matches.inspect}")
 					
 					if matches.length == 1
 						match = matches[0]
@@ -114,66 +101,36 @@ module KLib
 				ArgumentChecking.type_check(method_name, 'method_name', Symbol)
 				ArgumentChecking.type_check_each(args, 'args', Argument)
 				
-				$cli_log.log(:info, "Called '#{method_name}' with args #{args.map { |arg| arg.original }.inspect}")
-				
 				method_info = @valid_methods[method_name]
-				$cli_log.log(:info, "MethodInfo: #{method_info.inspect}")
-				
 				@method_specs ||= {}
 				unless @method_specs.key?(method_name)
 					@method_specs[method_name] = MethodSpec.new(method_name) {}
 				end
 				method_spec = @method_specs[method_name]
+				method_spec.send(:build, method_info)
 				
-				$cli_log.log(:info, "Defined parameters: #{method_spec.parameters.keys.inspect}")
-				
-				non_existent_parameters = method_spec.parameters.keys - method_info[:names]
-				raise NonExistentParametersError.new(non_existent_parameters) if non_existent_parameters.any?
-				
-				(method_info[:names] - method_spec.parameters.keys).each { |p| method_spec.param(p.to_sym) }
-				
-				$cli_log.log(:info, "Defined parameters: #{method_spec.parameters.keys.inspect}")
-				
-				# Find default
-				method_spec.parameters.values.select { |param| param.__type.nil? }.each do |param|
-					if %w{isnt is dont do no yes}.any? { |start| param.long_name.start_with?("#{start}_") }
-						param.type(:boolean)
-					elsif %w{arr array}.any? { |start| param.long_name.split('_').include?(start) }
-						param.type(:array)
-					elsif %w{hash}.any? { |start| param.long_name.split('_').include?(start) }
-						param.type(:hash)
-					else
-						param.type(:string)
+				args.each do |arg|
+					if arg.type == :short
+						if arg.value.include?('H')
+							method_help_extra
+						elsif arg.value.include?('h')
+							method_help
+						end
+					elsif arg.type == :long
+						if arg.value == 'help_extra'
+							method_help_extra
+						elsif arg.value == 'help'
+							method_help
+						end
 					end
 				end
 				
-				method_spec.parameters.values.select { |param| param.__type == :boolean }.each do |param|
-					if param.__boolean_data.nil?
-						if param.long_name.start_with?('isnt_')
-							param.boolean_data(:mode => :_isnt, :flip => true)
-						elsif param.long_name.start_with?('is_')
-							param.boolean_data(:mode => :is_isnt, :flip => false)
-						elsif param.long_name.start_with?('dont_')
-							param.boolean_data(:mode => :_dont, :flip => true)
-						elsif param.long_name.start_with?('do_')
-							param.boolean_data(:mode => :do_dont, :flip => false)
-						elsif param.long_name.start_with?('no_')
-							param.boolean_data(:mode => :_no, :flip => true)
-						elsif param.long_name.start_with?('yes_')
-							param.boolean_data(:mode => :yes_no, :flip => false)
-						else
-							param.boolean_data(:mode => :_no, :flip => false)
-						end
-					end
-					$cli_log.log(:info, "split: #{param.__boolean_data[:mode].to_s.split('_').inspect}")
-					param.__boolean_data[:mode].to_s.split('_').select { |s| s.length > 0 }.each do |start|
-						if param.long_name.start_with?("#{start}_")
-							param.instance_variable_set(:@base_name, param.long_name[(start.length + 1)..-1])
-						end
-					end
-					$cli_log.log(:info, "Bool: long => '#{param.long_name}', base => '#{param.base_name}' data => #{param.__boolean_data.inspect}")
+				begin
+					return method_spec.parse(args)
+				rescue MethodSpec::ParseError
+					method_help
+				rescue MethodSpec::ValidationError
 				end
-				
 			end
 			
 			def find_valid_methods
@@ -278,6 +235,14 @@ module KLib
 				super("Found parameter definitions for params that dont exist in method: #{params.join(', ')}")
 			end
 		end
+		
+		class ParameterNameOverlapErr < RuntimeError
+			attr_reader :param_names
+			def initialize(param_names)
+				@param_names = param_names
+				super("Multiple definitions of parameters: #{param_names.inspect}")
+			end
+		end
 			
 		class MethodSpec
 			
@@ -287,80 +252,431 @@ module KLib
 				raise ArgumentError.new("You must supply a block to this method.") unless block_given?
 				@method_name = method_name
 				@parameters = {}
+				@built = false
 				
 				block.call(self)
 			end
 			
-			def param(param_name)
-				ArgumentChecking.type_check(param_name, 'param_name', Symbol)
-				raise AlreadyDefinedParameterError.new(param_name) if @parameters.key?(param_name)
-				@parameters[param_name.to_s] = ParameterSpec.new(param_name)
+			def int(param_name)
+				param(param_name, :int)
 			end
+			
+			def float(param_name)
+				param(param_name, :float)
+			end
+			
+			def boolean(param_name)
+				param(param_name, :boolean)
+			end
+			
+			def string(param_name)
+				param(param_name, :string)
+			end
+			
+			def symbol(param_name)
+				param(param_name, :symbol)
+			end
+			
+			def array(param_name)
+				param(param_name, :array)
+			end
+			
+			def hash(param_name)
+				param(param_name, :hash)
+			end
+			
+			def parse(args)
+				raise "You have not yet built MethodSpec '#{@method_name}'" unless @built
+				ArgumentChecking.type_check_each(args, 'args', Argument)
+				
+				used_params = Set.new
+				
+				current_param = nil
+				values = []
+				
+				args.each do |arg|
+					if arg.type == :arg
+						if current_param.nil? || %i{array hash}.include?(current_param.type)
+							values << arg
+						else
+							current_param.value = arg
+							current_param = nil
+							values = []
+						end
+					else
+						if values.any?
+							if current_param.nil?
+								$cli_log.log(:fatal, "No parameter to apply args to: #{values.map { |a| "'#{a.value}'" }.join(', ')}")
+								raise ParseError.new
+							else
+								if %i{array hash}.include?(current_param.type)
+									current_param.value = values
+									current_param = nil
+									values = []
+								else
+									$cli_log.log(:fatal, "No arguments to submit to parameter '#{current_param.base_name.tr('_', '-')}'")
+									raise ParseError.new
+								end
+							end
+						end
+						if arg.type == :long
+							param = GnuMatch.multi_match(arg.value, @long_map.keys)
+							if param.is_a?(String)
+								param = @long_map[param]
+								if used_params.include?(param[:param])
+									$cli_log.log(:fatal, "You already used parameter '#{param[:param].base_name.tr('_', '-')}'")
+									raise ParseError.new
+								end
+								used_params << param[:param]
+								if param[:bool].nil?
+									current_param = param[:param]
+								else
+									param[:param].value = param[:bool]
+								end
+							elsif $gnu_matches.empty?
+								$cli_log.log(:fatal, "Could not match parameter '--#{arg.value.tr('_', '-')}'")
+								raise ParseError.new
+							else
+								$cli_log.log(:fatal, "Parameter '--#{arg.value.tr('_', '-')}' is ambiguous: #{$gnu_matches.map { |mat| "'--#{mat.tr('_', '-')}'" }.join(', ')}")
+								raise ParseError.new
+							end
+						elsif arg.type == :short
+							errors = false
+							param = arg.value.map { |p| [p, @short_map[p]] }
+							param.each do |p|
+								if p[1].nil?
+									errors = true
+									$cli_log.log(:fatal, "Could not find parameter '-#{p[0]}'")
+								elsif used_params.include?(p[1][:param])
+									errors = true
+									$cli_log.log(:fatal, "You already used parameter '-#{p[0]}'")
+								elsif param.length > 1 && p[1][:param].type != :boolean
+									errors = true
+									$cli_log.log(:fatal, "You can only supply boolean short parameters together, '-#{p[0]}' is not a boolean")
+								end
+								used_params << p[1][:param] unless p[1].nil?
+							end
+							raise ParseError.new if errors
+							
+							if param.any? { |p| p[1][:param].type == :boolean }
+								param.each do |p|
+									p[1][:param].value = p[1][:bool]
+								end
+							else
+								current_param = param[0][1][:param]
+							end
+						else
+							raise 'What is going on...'
+						end
+					end
+				end
+				
+				rest = []
+				if current_param.nil?
+					if values.any? && !@method_info[:rest]
+						$cli_log.log(:fatal, "No parameter to apply args to: #{values.map { |a| "'#{a.value}'" }.join(', ')}")
+					else
+						rest = values
+					end
+				else
+					if values.any?
+						current_param.value = values
+						rest = []
+					else
+						$cli_log.log(:fatal, "No arguments to submit to parameter '#{current_param.base_name.tr('_', '-')}'")
+						raise ParseError.new
+					end
+				end
+				
+				@method_info[:names].map { |name| @parameters[name] }.each do |param|
+					param.process
+				end
+				
+				return @method_info[:method].call(*@method_info[:names].map { |name| @parameters[name].value }, *rest)
+				
+				raise 'Why am I here...'
+			end
+			
+			class ParseError < RuntimeError
+			end
+			
+			class ValidationError < RuntimeError
+			end
+			
+			private
+			
+				def param(param_name, type)
+					ArgumentChecking.type_check(param_name, 'param_name', Symbol)
+					raise AlreadyDefinedParameterError.new(param_name) if @parameters.key?(param_name)
+					@parameters[param_name.to_s] = ParameterSpec.new(param_name, type)
+				end
+				
+				def build(method_info)
+					return if @built
+					@method_info = method_info
+					
+					non_existent_parameters = @parameters.keys - method_info[:names]
+					raise NonExistentParametersError.new(non_existent_parameters) if non_existent_parameters.any?
+					
+					# Assume types
+					(method_info[:names] - @parameters.keys).each do |param|
+						if %w{isnt is dont do no yes}.any? { |start| param.start_with?("#{start}_") }
+							param(param.to_sym, :boolean)
+						elsif %w{int num count}.any? { |inc| param.split('_').include?(inc) }
+							param(param.to_sym, :int)
+						elsif %w{arr array}.any? { |inc| param.split('_').include?(inc) }
+							param(param.to_sym, :array)
+						elsif %w{hash}.any? { |inc| param.split('_').include?(inc) }
+							param(param.to_sym, :hash)
+						else
+							param(param.to_sym, :string)
+						end
+					end
+					
+					# Figure out boolean mode, flip, and basename
+					@parameters.each_value do |param|
+						split = param.long_name.split('_')
+						if param.type == :boolean
+							if param.long_name.start_with?('isnt_')
+								mode = :_isnt
+								flip = true
+							elsif param.long_name.start_with?('is_')
+								mode = :is_isnt
+								flip = false
+							elsif param.long_name.start_with?('dont_')
+								mode = :_dont
+								flip = true
+							elsif param.long_name.start_with?('do_')
+								mode = :do_dont
+								flip = false
+							elsif param.long_name.start_with?('no_')
+								mode = :_no
+								flip = true
+							elsif param.long_name.start_with?('yes_')
+								mode = :yes_no
+								flip = false
+							else
+								mode = :_no
+								flip = false
+							end
+							param.data(:force => false, :mode => mode, :flip => flip)
+						elsif param.type == :string
+							prc = nil
+							if %w{file}.any? { |inc| split.include?(inc) }
+								prc = proc { |str| File.exists?(str) && File.file?(str) }
+							elsif %w{dir directory}.any? { |inc| split.include?(inc) }
+								prc = proc { |str| File.exists?(str) && File.directory?(str) }
+							elsif %w{exe}.any? { |inc| split.include?(inc) }
+								prc = proc { |str| File.exists?(str) && File.executable?(str) }
+							elsif %w{path}.any? { |inc| split.include?(inc) }
+								prc = proc { |str| File.exists?(str) }
+							end
+							param.data(:force => false, :pre => prc) unless prc.nil?
+						elsif param.type == :int
+							if %w{count}.any? { |inc| split.include?(inc) }
+								param.data(:force => false, :post => proc { |val| val >= 0 })
+							end
+						end
+					end
+					
+					# TODO: BooleanParam, StringParam, HashParam, ArrayParam, IntParam, FloatParam
+					
+					# Map long names
+					long_map = @parameters.values.map do |param|
+						if param.type == :boolean
+							split = param.__data[:mode].to_s.split('_')
+							[
+								[split[0].length > 0 ? "#{split[0]}_#{param.base_name}" : param.base_name, { :param => param, :bool => !param.__data[:flip] }],
+								[split[1].length > 0 ? "#{split[1]}_#{param.base_name}" : param.base_name, { :param => param, :bool => param.__data[:flip] }]
+							]
+						else
+							[[param.long_name, { :param => param, :bool => nil }]]
+						end
+					end.flatten(1)
+					
+					long_name_duplicates = long_map.map { |info| info[0] }.duplicates
+					raise ParameterNameOverlapErr.new(long_name_duplicates) if long_name_duplicates.any?
+					
+					long_map = long_map.to_h
+					
+					# Map short names
+					short_map = {}
+					used_short_names = Set['h', 'H']
+					
+					@parameters.values.select { |param| param.type == :boolean }.each do |param|
+						start = param.base_name[0]
+						unless used_short_names.include?(start.downcase) || used_short_names.include?(start.upcase)
+							used_short_names << start.downcase << start.upcase
+							short_map[start.downcase] = { :param => param, :bool => !param.__data[:flip] }
+							short_map[start.upcase] = { :param => param, :bool => param.__data[:flip] }
+						end
+					end
+					
+					@parameters.values.select { |param| param.type != :boolean }.each do |param|
+						start = param.base_name[0]
+						if !used_short_names.include?(start.downcase)
+							used_short_names << start.downcase
+							short_map[start.downcase] = { :param => param, :bool => nil }
+						elsif !used_short_names.include?(start.upcase)
+							used_short_names << start.upcase
+							short_map[start.upcase] = { :param => param, :bool => nil }
+						end
+					end
+					
+					@long_map = long_map
+					@short_map = short_map
+					
+					@built = true
+					nil
+				end
 			
 			class ParameterSpec
 				
-				attr_reader :convert, :long_name, :on_missing, :min_args, :short_name, :max_args, :on_zero, :comments, :base_name
+				attr_reader :long_name, :base_name, :comments, :type, :default, :value, :defined
 				
-				def initialize(param_name)
+				def initialize(param_name, type)
 					ArgumentChecking.type_check(param_name, 'param_name', Symbol)
 					StringCasing.matches?(param_name.to_s, :snake, :behavior => :error, :nums => true)
+					ArgumentChecking.enum_check(type, 'type', :string, :symbol, :boolean, :int, :float, :array, :hash)
 					
 					@long_name = param_name.to_s
-					@short_name = nil
-					@base_name = @long_name
+					if type == :boolean
+						%w{isnt is dont do yes no}.each do |start|
+							if @long_name.start_with?("#{start}_")
+								@base_name = @long_name[(start.length+1)..-1]
+								break
+							end
+						end
+					else
+						@base_name = @long_name
+					end
 					
-					@type = nil
+					@type = type
+					@data = {}
+					required
 					
-					@boolean_data = nil
-					
-					@min_args = 1
-					@max_args = 1
-					
-					@on_missing = nil
-					@on_zero = nil
-					
-					@convert = nil
+					@defined = false
+					@value = nil
 					
 					@comments = []
 				end
 				
-				def type(type)
-					ArgumentChecking.enum_check(type, 'type', :string, :boolean, :int, :float, :array, :hash)
-					@type = type
+				def required
+					@default = {
+						:type => :required
+					}
 					self
 				end
 				
-				def boolean_data(hash_args)
-					hash_args = HashNormalizer.normalize(hash_args) do |norm|
-						norm.mode.enum_check(:is_isnt, :_isnt, :do_dont, :_dont, :yes_no, :_no)
-						norm.flip.boolean_check
+				def default_value(val)
+					@default = {
+						:type => :value,
+						:value => val
+					}
+					self
+				end
+				
+				def data(hash_args = {})
+					# pre
+					#   convert
+					#     post
+					#
+					# err / default
+					if @type == :string
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.pre_convert_validate(:pre).no_default.type_check(Proc, NilClass)
+							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
+							norm.convert.no_default.type_check(Proc, NilClass)
+						end
+					elsif @type == :symbol
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.pre_convert_validate(:pre).no_default.type_check(Proc, NilClass)
+							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
+							norm.convert.default_value(proc { |val| val.to_sym }).type_check(Proc, NilClass)
+						end
+					elsif @type == :boolean
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.mode.no_default.enum_check(:is_isnt, :_isnt, :do_dont, :_dont, :yes_no, :_no)
+							norm.flip.no_default.boolean_check
+						end
+					elsif @type == :int
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.pre_convert_validate(:pre).default_value(proc { |val| /$-?\d+$/.match?(val) }).type_check(Proc, NilClass)
+							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
+							norm.convert.default_value(proc { |val| val.to_i }).type_check(Proc, NilClass)
+						end
+					elsif @type == :float
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.pre_convert_validate(:pre).default_value(proc { |val| /^-?\d+(\.\d+)?$/.match?(val) }).type_check(Proc, NilClass)
+							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
+							norm.convert.default_value(proc { |val| val.to_f }).type_check(Proc, NilClass)
+						end
+					elsif @type == :array
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.smart_convert.no_default.boolean_check
+							
+							norm.pre_convert_validate(:pre).no_default.type_check(Proc, NilClass)
+							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
+							norm.convert.no_default.type_check(Proc, NilClass)
+						end
+					elsif @type == :hash
+						hash_args = HashNormalizer.normalize(hash_args) do |norm|
+							norm.force.default_value(true).boolean_check
+							
+							norm.smart_convert.no_default.boolean_check
+							norm.assume_key.no_default.enum_check(:string, :symbol)
+							
+							norm.normalize.no_default.type_check(Proc, NilClass)
+						end
+					else
+						raise 'What is going on...'
 					end
-					@type = :boolean
-					@boolean_data = hash_args
-				end
-				
-				def accepts(min_args, max_args)
-					ArgumentChecking.type_check(min_args, 'min_args', Integer)
-					ArgumentChecking.type_check(max_args, 'max_args', NilClass, Integer)
-					raise ArgumentError.new("min_args must be >= 0, given: #{min_args.inspect}") if min_args < 0
-					raise ArgumentError.new("max_args must be nil or >= min_args, given: #{max_args.inspect}") if !max_args.nil? && max_args < min_args
-					@min_args = min_args
-					@max_args = max_args
+					if hash_args[:force]
+						@data.merge!(hash_args.select { |k, v| k != :force }) { |key, old_val, new_val| new_val }
+					else
+						@data.merge!(hash_args.select { |k, v| k != :force }) { |key, old_val, new_val| old_val }
+					end
 					self
 				end
 				
-				def comment(*messages)
-					ArgumentChecking.type_check_each(messages, 'messages', String)
-					@comments = messages
-					self
+				def process
+					if @value.is_a?(Argument)
+						@value = @value.value
+					elsif @value.is_a?(Array)
+						@value = @value.map { |v| v.value }
+					end
+					nil
 				end
 				
-				def __boolean_data
-					@boolean_data
+				def value= (val)
+					@defined = true
+					@value = val
 				end
 				
-				def __type
-					@type
+				def __data
+					@data
+				end
+				
+				def comments(*comments)
+					if comments.any?
+						ArgumentChecking.type_check_each(comments, 'comments', String)
+						@comments = comments
+						self
+					else
+						@comments
+					end
 				end
 				
 			end
@@ -377,14 +693,16 @@ module KLib
 		
 		class Argument
 			
-			attr_reader :value, :type, :original
+			attr_reader :value, :type, :original, :escaped
 			
 			def initialize(string)
 				ArgumentChecking.type_check(string, 'string', String)
 				@original = string
+				@escaped = false
 				if string.start_with?('@')
 					@type = :arg
 					@value = string[1..-1]
+					@escaped = true
 				elsif string.start_with?('--')
 					raise InvalidParameterNameError.new(string) unless CliMod::Regexes::LONG_REGEX.match?(string)
 					@type = :long

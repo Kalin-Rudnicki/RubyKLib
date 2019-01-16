@@ -7,15 +7,17 @@ module Test
 	extend KLib::CliMod
 
 	method_spec(:main) do |spec|
-		spec.param(:first_name)
-		spec.param(:dont_kill).boolean_data(:mode => :do_dont, :flip => true)
+		spec.int(:age)
 	end
 	
-	def self.main(first_name, last_name, age, is_cool, dont_kill)
-	
+	def self.main(first_name, last_name, age)
+		puts("first_name: #{first_name.inspect}")
+		puts("last_name: #{last_name.inspect}")
+		puts("age: #{age.inspect}")
+		{ :first_name => first_name, :last_name => last_name, :age => age }
 	end
 	
 end
 
 $stderr = $stdout
-Test.parse(%w{main --first-name})
+puts Test.parse
