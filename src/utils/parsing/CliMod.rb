@@ -72,6 +72,8 @@ module KLib
 					
 					matches = method_matches + mod_matches
 					
+					# TODO: Ambiguous warning
+					
 					if matches.length == 1
 						match = matches[0]
 						if match[1] == :method
@@ -141,10 +143,6 @@ module KLib
 					rest = nil
 					
 					# Validation
-					if method.parameters.length == 0
-						$cli_log.log(:error, "Method '#{met}' will be ignored... No parameters is not allowed")
-						next
-					end
 					
 					method.parameters.each do |param|
 						invalid << param unless %i{req rest}.include?(param[0])
@@ -218,6 +216,18 @@ module KLib
 				@valid_mods.each_key { |k| str << "\n        #{k.to_s.tr('_', '-')}" }
 				
 				str << "\n"
+				
+				if @valid_methods.key?(:main)
+					method_info = @valid_methods[:main]
+					@method_specs ||= {}
+					unless @method_specs.key?(:main)
+						@method_specs[:main] = MethodSpec.new(:main) {}
+					end
+					method_spec = @method_specs[:main]
+					method_spec.send(:build, method_info)
+					
+					str << method_help(method_spec, nil)
+				end
 				
 				if exit_code.nil?
 					str
