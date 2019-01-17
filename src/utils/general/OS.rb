@@ -1,7 +1,7 @@
 
 module KLib
 
-	module Platform
+	module OS
 	
 		@platform = (/mingw/.match?(RUBY_PLATFORM) ? :windows : :unix)
 		
