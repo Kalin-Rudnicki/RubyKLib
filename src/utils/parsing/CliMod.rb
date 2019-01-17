@@ -48,16 +48,16 @@ module KLib
 				end
 				if invalid_names.any?
 					$cli_log.log(:fatal, "Incorrectly formatted parameter names: #{invalid_names.map { |n| "'#{n}'" }.join(', ')}")
-					help
+					help(1)
 				end
 			end
 			
 			if mapped_args.length > 0
 				arg = mapped_args[0]
 				if (arg.type == :short && arg.value.include?('h')) || (arg.type == :long && arg.value == 'help')
-					help
+					help(0)
 				elsif (arg.type == :short && arg.value.include?('H')) || (arg.type == :long && arg.value == 'help_extra')
-					help_extra
+					help_extra(0)
 				end
 			end
 			
@@ -89,7 +89,7 @@ module KLib
 				return call_handler(:main, mapped_args)
 			else
 				$cli_log.log(:fatal, "Unable to find method in '#{self}' with arguments: [#{mapped_args.map { |arg| "'#{arg.original}'" }.join(' ')}]")
-				help
+				help(1)
 			end
 			
 			raise 'How did you make it here...'
@@ -112,15 +112,15 @@ module KLib
 				args.each do |arg|
 					if arg.type == :short
 						if arg.value.include?('H')
-							method_help_extra
+							method_help_extra(method_spec, 0)
 						elsif arg.value.include?('h')
-							method_help
+							method_help(method_spec, 0)
 						end
 					elsif arg.type == :long
 						if arg.value == 'help_extra'
-							method_help_extra
+							method_help_extra(method_spec, 0)
 						elsif arg.value == 'help'
-							method_help
+							method_help(method_spec, 0)
 						end
 					end
 				end
@@ -128,8 +128,7 @@ module KLib
 				begin
 					return method_spec.parse(args)
 				rescue MethodSpec::ParseError
-					method_help
-				rescue MethodSpec::ValidationError
+					method_help(method_spec, 1)
 				end
 			end
 			
@@ -208,24 +207,58 @@ module KLib
 				valid_mods
 			end
 			
-			def help
-				$cli_log.log(:info, "\nTODO: Help")
-				exit(-1)
+			def help(exit_code)
+				ArgumentChecking.enum_check(exit_code, 'exit_code', 0, 1, nil)
+				str = "\n--- Help ---\nUsage: #{([File.basename($0, File.extname($0))] + self.inspect.split('::')[1..-1].map { |s| s.to_snake.tr('_', '-') } + ['[(method/mod)-name]', '[OPTIONS]']).join(' ')}"
+				
+				str << "\n\n    [Valid Methods]"
+				@valid_methods.each_key { |k| str << "\n        #{k.to_s.tr('_', '-')}" }
+				
+				str << "\n\n    [Valid Mods]"
+				@valid_mods.each_key { |k| str << "\n        #{k.to_s.tr('_', '-')}" }
+				
+				str << "\n"
+				
+				if exit_code.nil?
+					str
+				else
+					$cli_log.log(:info, str)
+					exit(exit_code)
+				end
 			end
 			
-			def help_extra
-				$cli_log.log(:info, "\nTODO: HelpExtra")
-				exit(-1)
+			def help_extra(exit_code)
+				$cli_log.log(:info, "HelpExtra does nothing additional at this time")
+				help(exit_code)
 			end
 			
-			def method_help
-				$cli_log.log(:info, "\nTODO: MethodHelp")
-				exit(-1)
+			def method_help(method_spec, exit_code)
+				ArgumentChecking.enum_check(exit_code, 'exit_code', 0, 1, nil)
+				
+				str = "\n--- MethodHelp ---\nUsage: #{([File.basename($0, File.extname($0))] + self.inspect.split('::')[1..-1].map { |s| s.to_snake.tr('_', '-') } + [method_spec.method_name.to_s.tr('_', '-'), '[OPTIONS]']).join(' ')}"
+				
+				required, optional = method_spec.parameters.values.partition { |param| param.default[:type] == :required }
+				
+				
+				str << "\n\n[REQUIRED]"
+				required.each { |param| str << "\n    #{param.info}" }
+				
+				str << "\n\n[OPTIONAL]"
+				optional.each { |param| str << "\n    #{param.info}" }
+				
+				str << "\n"
+				
+				if exit_code.nil?
+					str
+				else
+					$cli_log.log(:info, str)
+					exit(exit_code)
+				end
 			end
 			
-			def method_help_extra
-				$cli_log.log(:info, "\nTODO: MethodHelpExtra")
-				exit(-1)
+			def method_help_extra(method_spec, exit_code)
+				$cli_log.log(:info, "MethodHelpExtra does nothing additional at this time")
+				method_help(method_spec, exit_code)
 			end
 			
 		class NonExistentParametersError < RuntimeError
@@ -246,7 +279,7 @@ module KLib
 			
 		class MethodSpec
 			
-			attr_reader :parameters, :method_name
+			attr_reader :parameters, :method_name, :short_map, :long_map
 			
 			def initialize(method_name, &block)
 				raise ArgumentError.new("You must supply a block to this method.") unless block_given?
@@ -304,16 +337,18 @@ module KLib
 							values = []
 						end
 					else
-						if values.any?
-							if current_param.nil?
+						if current_param.nil?
+							if values.any?
 								$cli_log.log(:fatal, "No parameter to apply args to: #{values.map { |a| "'#{a.value}'" }.join(', ')}")
 								raise ParseError.new
+							end
+						else
+							if %i{array hash}.include?(current_param.type)
+								current_param.value = values
+								current_param = nil
+								values = []
 							else
-								if %i{array hash}.include?(current_param.type)
-									current_param.value = values
-									current_param = nil
-									values = []
-								else
+								unless values.any?
 									$cli_log.log(:fatal, "No arguments to submit to parameter '#{current_param.base_name.tr('_', '-')}'")
 									raise ParseError.new
 								end
@@ -375,11 +410,12 @@ module KLib
 				if current_param.nil?
 					if values.any? && !@method_info[:rest]
 						$cli_log.log(:fatal, "No parameter to apply args to: #{values.map { |a| "'#{a.value}'" }.join(', ')}")
+						raise ParseError.new
 					else
 						rest = values
 					end
 				else
-					if values.any?
+					if values.any? || %i{array hash}.include?(current_param.type)
 						current_param.value = values
 						rest = []
 					else
@@ -388,23 +424,36 @@ module KLib
 					end
 				end
 				
+				errors = false
 				@method_info[:names].map { |name| @parameters[name] }.each do |param|
-					param.process
+					begin
+						param.process
+					rescue ParseError
+						errors = true
+					end
 				end
+				raise ParseError if errors
 				
-				return @method_info[:method].call(*@method_info[:names].map { |name| @parameters[name].value }, *rest)
-				
-				raise 'Why am I here...'
+				@method_info[:method].call(*@method_info[:names].map { |name| @parameters[name].value }, *rest.map { |a| a.value })
 			end
 			
 			class ParseError < RuntimeError
 			end
 			
-			class ValidationError < RuntimeError
+			class MissingRequiredError < RuntimeError
+			end
+			
+			class PreValidationError < RuntimeError
+			end
+			
+			class PostValidationError < RuntimeError
+			end
+			
+			class ConversionError < RuntimeError
 			end
 			
 			private
-			
+				
 				def param(param_name, type)
 					ArgumentChecking.type_check(param_name, 'param_name', Symbol)
 					raise AlreadyDefinedParameterError.new(param_name) if @parameters.key?(param_name)
@@ -526,6 +575,10 @@ module KLib
 					@long_map = long_map
 					@short_map = short_map
 					
+					@parameters.each_value do |param|
+						param.instance_variable_set(:@short, @short_map.select { |k, v| v[:param] == param }.transform_values { |v| v[:bool] }.invert)
+					end
+					
 					@built = true
 					nil
 				end
@@ -547,12 +600,14 @@ module KLib
 								break
 							end
 						end
+						@base_name ||= @long_name
 					else
 						@base_name = @long_name
 					end
 					
 					@type = type
 					@data = {}
+					data
 					required
 					
 					@defined = false
@@ -609,7 +664,7 @@ module KLib
 						hash_args = HashNormalizer.normalize(hash_args) do |norm|
 							norm.force.default_value(true).boolean_check
 							
-							norm.pre_convert_validate(:pre).default_value(proc { |val| /$-?\d+$/.match?(val) }).type_check(Proc, NilClass)
+							norm.pre_convert_validate(:pre).default_value(proc { |val| /^-?\d+$/.match?(val) }).type_check(Proc, NilClass)
 							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
 							norm.convert.default_value(proc { |val| val.to_i }).type_check(Proc, NilClass)
 						end
@@ -617,15 +672,13 @@ module KLib
 						hash_args = HashNormalizer.normalize(hash_args) do |norm|
 							norm.force.default_value(true).boolean_check
 							
-							norm.pre_convert_validate(:pre).default_value(proc { |val| /^-?\d+(\.\d+)?$/.match?(val) }).type_check(Proc, NilClass)
+							norm.pre_convert_validate(:pre).default_value(proc { |val| /^-?\d+(.\d+)?$/.match?(val) }).type_check(Proc, NilClass)
 							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
 							norm.convert.default_value(proc { |val| val.to_f }).type_check(Proc, NilClass)
 						end
 					elsif @type == :array
 						hash_args = HashNormalizer.normalize(hash_args) do |norm|
 							norm.force.default_value(true).boolean_check
-							
-							norm.smart_convert.no_default.boolean_check
 							
 							norm.pre_convert_validate(:pre).no_default.type_check(Proc, NilClass)
 							norm.post_convert_validate(:post).no_default.type_check(Proc, NilClass)
@@ -634,9 +687,6 @@ module KLib
 					elsif @type == :hash
 						hash_args = HashNormalizer.normalize(hash_args) do |norm|
 							norm.force.default_value(true).boolean_check
-							
-							norm.smart_convert.no_default.boolean_check
-							norm.assume_key.no_default.enum_check(:string, :symbol)
 							
 							norm.normalize.no_default.type_check(Proc, NilClass)
 						end
@@ -651,12 +701,107 @@ module KLib
 					self
 				end
 				
-				def process
-					if @value.is_a?(Argument)
-						@value = @value.value
-					elsif @value.is_a?(Array)
-						@value = @value.map { |v| v.value }
+				def self.try_convert(val, default_sym)
+					if /^-?\d+$/.match?(val)
+						val.to_i
+					elsif /^-?\d+(.\d+)?$/.match?(val)
+						val.to_f
+					elsif /^'.*'$/.match?(val)
+						val[1..-2].to_s
+					elsif /^:.+$/.match?(val)
+						val[1..-1].to_sym
+					elsif /^\[[^\[\]]*\]$/.match?(val)
+						val[1..-2].split(',').map { |v| try_convert(v.strip, false) }
+					else
+						default_sym ? val.to_sym : val.to_s
 					end
+				end
+				
+				def info
+					if @type == :boolean
+						if @data[:mode] == :_isnt
+							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[isnt-]#{@base_name.tr('_', '-')}"
+						elsif @data[:mode] == :is_isnt
+							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{isnt/is}-#{@base_name.tr('_', '-')}"
+						elsif @data[:mode] == :_dont
+							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[dont-]#{@base_name.tr('_', '-')}"
+						elsif @data[:mode] == :do_dont
+							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{dont/do}-#{@base_name.tr('_', '-')}"
+						elsif @data[:mode] == :_no
+							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[no-]#{@base_name.tr('_', '-')}"
+						elsif @data[:mode] == :yes_no
+							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{no/yes}-#{@base_name.tr('_', '-')}"
+						else
+							raise 'What is going on...'
+						end
+					else
+						"#{@short.key?(nil) ? "-#{@short[nil]}, " : ''}--#{@base_name.tr('_', '-')} #{@base_name.upcase}"
+					end
+				end
+				
+				def process
+					if @defined
+						if @value.nil?
+							val = nil
+						elsif @value == true || @value == false
+							val = @value
+						elsif @value.is_a?(Argument)
+							val = @value.value
+						else
+							val = @value.map { |v| v.value }
+						end
+					
+						if @type == :hash
+							val = val.map { |v| v.split('=>').map { |s| s.strip } }
+							errors = false
+							val.each_with_index do |v, i|
+								if v.length == 2
+									v[0] = ParameterSpec.try_convert(v[0], true)
+									v[1] = ParameterSpec.try_convert(v[1], false)
+								else
+									$cli_log.log(:fatal, "'#{@base_name.tr('_', '-')}'[#{i}] is malformatted")
+									errors = true
+								end
+							end
+							raise ParseError.new if errors
+							val = val.to_h
+							begin
+								val = HashNormalizer.normalize(val, &@data[:normalize]) unless @data[:normalize].nil?
+							rescue => e
+								$cli_log.log(:fatal, "Error normalizing '#{@base_name.tr('_', '-')}'\n\t#{e.message}")
+								raise ParseError.new
+							end
+						elsif @type == :boolean
+						else
+							unless @data[:pre_convert_validate].nil?
+								unless @data[:pre_convert_validate].call(val)
+									$cli_log.log(:fatal, "Failed to pre_validate parameter '#{@base_name.tr('_', '-')}'")
+									raise ParseError.new
+								end
+							end
+							
+							unless @data[:convert].nil?
+								val = @data[:convert].call(val)
+							end
+							
+							unless @data[:post_convert_validate].nil?
+								unless @data[:post_convert_validate].call(val)
+									$cli_log.log(:fatal, "Failed to post_validate parameter '#{@base_name.tr('_', '-')}'")
+									raise ParseError.new
+								end
+							end
+						end
+						
+					else
+						if @default[:type] == :required
+							$cli_log.log(:fatal, "Missing required parameter '#{@base_name.tr('_', '-')}'")
+							raise ParseError.new
+						else
+							val = @default[:value]
+						end
+					end
+					
+					@value = val
 					nil
 				end
 				
