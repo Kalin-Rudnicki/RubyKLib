@@ -174,5 +174,3 @@ module KLib
 	end
 
 end
-
-puts("Kalin\nRudnicki".red.gsub(/\n/, "\n|-> "))
