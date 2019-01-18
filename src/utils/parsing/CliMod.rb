@@ -87,11 +87,16 @@ module KLib
 				end
 			end
 			
-			if @valid_methods.key?(:main)
-				return call_handler(:main, mapped_args)
-			else
-				$cli_log.log(:fatal, "Unable to find method in '#{self}' with arguments: [#{mapped_args.map { |arg| "'#{arg.original}'" }.join(' ')}]")
+			if mapped_args.length > 0 && mapped_args[0].type == :arg && mapped_args.any? { |a| a.type != :arg }
+				$cli_log.log(:fatal, "Could not find method or mod '#{mapped_args[0].value}'")
 				help(1)
+			else
+				if @valid_methods.key?(:main)
+					return call_handler(:main, mapped_args)
+				else
+					$cli_log.log(:fatal, "Unable to find method in '#{self}' with arguments: [#{mapped_args.map { |arg| "'#{arg.original}'" }.join(' ')}]")
+					help(1)
+				end
 			end
 			
 			raise 'How did you make it here...'
@@ -209,10 +214,10 @@ module KLib
 				ArgumentChecking.enum_check(exit_code, 'exit_code', 0, 1, nil)
 				str = "\n--- Help ---\nUsage: #{([File.basename($0, File.extname($0))] + self.inspect.split('::')[1..-1].map { |s| s.to_snake.tr('_', '-') } + ['[(method/mod)-name]', '[OPTIONS]']).join(' ')}"
 				
-				str << "\n\n    [Valid Methods]"
+				str << "\n\n    [#{'Valid Methods'.cyan}]"
 				@valid_methods.each_key { |k| str << "\n        #{k.to_s.tr('_', '-')}" }
 				
-				str << "\n\n    [Valid Mods]"
+				str << "\n\n    [#{'Valid Mods'.cyan}]"
 				@valid_mods.each_key { |k| str << "\n        #{k.to_s.tr('_', '-')}" }
 				
 				str << "\n"
@@ -250,11 +255,11 @@ module KLib
 				required, optional = method_spec.parameters.values.partition { |param| param.default[:type] == :required }
 				
 				
-				str << "\n\n[REQUIRED]"
-				required.each { |param| str << "\n    #{param.info}" }
+				str << "\n\n[#{'REQUIRED'.red}]"
+				required.each { |param| str << param.info(false) }
 				
-				str << "\n\n[OPTIONAL]"
-				optional.each { |param| str << "\n    #{param.info}" }
+				str << "\n\n[#{'OPTIONAL'.green}]"
+				optional.each { |param| str << param.info(false) }
 				
 				str << "\n"
 				
@@ -267,8 +272,27 @@ module KLib
 			end
 			
 			def method_help_extra(method_spec, exit_code)
-				$cli_log.log(:info, "MethodHelpExtra does nothing additional at this time")
-				method_help(method_spec, exit_code)
+				ArgumentChecking.enum_check(exit_code, 'exit_code', 0, 1, nil)
+				
+				str = "\n--- MethodHelpExtra ---\nUsage: #{([File.basename($0, File.extname($0))] + self.inspect.split('::')[1..-1].map { |s| s.to_snake.tr('_', '-') } + [method_spec.method_name.to_s.tr('_', '-'), '[OPTIONS]']).join(' ')}"
+				
+				required, optional = method_spec.parameters.values.partition { |param| param.default[:type] == :required }
+				
+				
+				str << "\n\n[#{'REQUIRED'.red}]"
+				required.each { |param| str << param.info(true) }
+				
+				str << "\n\n[#{'OPTIONAL'.green}]"
+				optional.each { |param| str << param.info(true) }
+				
+				str << "\n"
+				
+				if exit_code.nil?
+					str
+				else
+					$cli_log.log(:info, str)
+					exit(exit_code)
+				end
 			end
 			
 		class NonExistentParametersError < RuntimeError
@@ -479,7 +503,7 @@ module KLib
 					
 					# Assume types
 					(method_info[:names] - @parameters.keys).each do |param|
-						if %w{isnt is dont do no yes}.any? { |start| param.start_with?("#{start}_") }
+						if MethodSpec::ParameterSpec::BOOLEAN_MAPPINGS.keys.any? { |start| param.start_with?("#{start}_") }
 							param(param.to_sym, :boolean)
 						elsif %w{int num count}.any? { |inc| param.split('_').include?(inc) }
 							param(param.to_sym, :int)
@@ -496,25 +520,18 @@ module KLib
 					@parameters.each_value do |param|
 						split = param.long_name.split('_')
 						if param.type == :boolean
-							if param.long_name.start_with?('isnt_')
-								mode = :_isnt
-								flip = true
-							elsif param.long_name.start_with?('is_')
-								mode = :is_isnt
-								flip = false
-							elsif param.long_name.start_with?('dont_')
-								mode = :_dont
-								flip = true
-							elsif param.long_name.start_with?('do_')
-								mode = :do_dont
-								flip = false
-							elsif param.long_name.start_with?('no_')
-								mode = :_no
-								flip = true
-							elsif param.long_name.start_with?('yes_')
-								mode = :yes_no
-								flip = false
-							else
+							found = false
+							mode = nil
+							flip = nil
+							MethodSpec::ParameterSpec::BOOLEAN_MAPPINGS.each_pair do |start, mapping|
+								if param.long_name.start_with?("#{start}_")
+									mode = mapping
+									flip = mapping.to_s.start_with?('_')
+									found = true
+									break
+								end
+							end
+							unless found
 								mode = :_no
 								flip = false
 							end
@@ -537,8 +554,6 @@ module KLib
 							end
 						end
 					end
-					
-					# TODO: BooleanParam, StringParam, HashParam, ArrayParam, IntParam, FloatParam
 					
 					# Map long names
 					long_map = @parameters.values.map do |param|
@@ -595,6 +610,20 @@ module KLib
 			
 			class ParameterSpec
 				
+				# :start => :mode
+				BOOLEAN_MAPPINGS = {
+					:is => :is_isnt,
+					:isnt => :_isnt,
+					:do => :do_dont,
+					:dont => :_dont,
+					:yes => :yes_no,
+					:no => :_no,
+					:can => :can_cant,
+					:cant => :_cant,
+					:will => :will_wont,
+					:wont => :_wont
+				}
+				
 				attr_reader :long_name, :base_name, :comments, :type, :default, :value, :defined
 				
 				def initialize(param_name, type)
@@ -604,7 +633,7 @@ module KLib
 					
 					@long_name = param_name.to_s
 					if type == :boolean
-						%w{isnt is dont do yes no}.each do |start|
+						BOOLEAN_MAPPINGS.keys.map { |k| k.to_s }.each do |start|
 							if @long_name.start_with?("#{start}_")
 								@base_name = @long_name[(start.length+1)..-1]
 								break
@@ -667,7 +696,7 @@ module KLib
 						hash_args = HashNormalizer.normalize(hash_args) do |norm|
 							norm.force.default_value(true).boolean_check
 							
-							norm.mode.no_default.enum_check(:is_isnt, :_isnt, :do_dont, :_dont, :yes_no, :_no)
+							norm.mode.no_default.enum_check(BOOLEAN_MAPPINGS.values)
 							norm.flip.no_default.boolean_check
 						end
 					elsif @type == :int
@@ -727,26 +756,60 @@ module KLib
 					end
 				end
 				
-				def info
+				WIDTH_1 = 10
+				WIDTH_2 = 30
+				WIDTH_3 = 4
+				
+				def info(extra_info)
 					if @type == :boolean
-						if @data[:mode] == :_isnt
-							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[isnt-]#{@base_name.tr('_', '-')}"
-						elsif @data[:mode] == :is_isnt
-							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{isnt/is}-#{@base_name.tr('_', '-')}"
-						elsif @data[:mode] == :_dont
-							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[dont-]#{@base_name.tr('_', '-')}"
-						elsif @data[:mode] == :do_dont
-							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{dont/do}-#{@base_name.tr('_', '-')}"
-						elsif @data[:mode] == :_no
-							"#{@short.any? ? "-[#{@short[false]}]#{@short[true]}, " : ''}--[no-]#{@base_name.tr('_', '-')}"
-						elsif @data[:mode] == :yes_no
-							"#{@short.any? ? "-{#{@short[false]}/#{@short[true]}}, " : ''}--{no/yes}-#{@base_name.tr('_', '-')}"
+						split = @data[:mode].to_s.split('_')
+						if split[0].length == 0
+							param = [
+								@short.any? ? "-[#{@short[false]}]#{@short[true]}".magenta : nil,
+								"--[#{split[1]}-]#{@base_name.tr('_', '-')}".magenta,
+								nil
+							]
 						else
-							raise 'What is going on...'
+							param = [
+								@short.any? ? "-{#{@short[false]}/#{@short[true]}}".magenta : nil,
+								"--{#{split[1]}/#{split[0]}}#{@base_name.tr('_', '-')}".magenta,
+								nil
+							]
 						end
 					else
-						"#{@short.key?(nil) ? "-#{@short[nil]}, " : ''}--#{@base_name.tr('_', '-')} #{@base_name.upcase}"
+						param = [@short.key?(nil) ? "-#{@short[nil]}".magenta : nil, "--#{@base_name.tr('_', '-')}".magenta, @base_name.upcase.blue]
 					end
+					
+					if param[0].nil? || param[2].nil? || (param[1].length + param[2].length + 1) <= WIDTH_2
+						params = ["#{(param[0].nil? ? '' : "#{param[0]}, ").rjust(WIDTH_1)}#{"#{param[1]}#{param[2].nil? ? '' : " #{param[2]}"}".ljust(WIDTH_2)}"]
+					else
+						params = [
+							"#{''.rjust(WIDTH_1)}#{param[1]}",
+							"#{"#{param[0]}  ".rjust(WIDTH_1 - 1)}#{param[2]},"
+						]
+					end
+					
+					remaining_comments = @comments.dup
+					if extra_info
+						extra = [
+							"Type: #{@type}",
+							@default[:value].nil? ? nil : "Default: #{@default[:value]}"
+						]
+						remaining_comments = extra.select { |i| !i.nil? } + remaining_comments #.map { |c| "    #{c}" }
+					end
+					
+					first_line = true
+					str = ''
+					until params.empty? && remaining_comments.empty?
+						tmp = (params.empty? ? '' : "#{params.shift}").ljust(WIDTH_1 + WIDTH_2)
+						if remaining_comments.any? && tmp.length == (WIDTH_1 + WIDTH_2)
+							tmp << (' ' * WIDTH_3) << (first_line ? '' : ' ' * WIDTH_3) << remaining_comments.shift
+						end
+						str << "\n" << tmp
+						first_line = false
+					end
+					
+					(extra_info ? "\n" : "") + str
 				end
 				
 				def process

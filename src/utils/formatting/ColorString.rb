@@ -95,8 +95,9 @@ class String
 		((pad_str * left) + self + (pad_str * right))
 	end
 	
+	alias :original_length :length
 	def length
-		self.de_color.length
+		self.de_color.original_length
 	end
 	
 	def de_color
