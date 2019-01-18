@@ -68,7 +68,7 @@ class String
 		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
 		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
 		
-		my_length = self.de_color.length
+		my_length = self.length
 		add_length = (length - my_length < 0 ? 0 : length - my_length)
 		((pad_str * add_length) + self)
 	end
@@ -78,7 +78,7 @@ class String
 		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
 		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
 		
-		my_length = self.de_color.length
+		my_length = self.length
 		add_length = (length - my_length < 0 ? 0 : length - my_length)
 		(self + (pad_str * add_length))
 	end
@@ -88,11 +88,15 @@ class String
 		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
 		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
 		
-		my_length = self.de_color.length
+		my_length = self.length
 		add_length = (length - my_length < 0 ? 0 : length - my_length)
 		left = add_length / 2
 		right = add_length - left
 		((pad_str * left) + self + (pad_str * right))
+	end
+	
+	def length
+		self.de_color.length
 	end
 	
 	def de_color
