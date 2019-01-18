@@ -6,7 +6,7 @@ end
 module KLib
 	
 	class ColorString
-	
+		
 		INTER_STRING = '#{}'
 		CLEAR_COLORS = "\e[0m"
 		VALID_COLOR_MODES = [:basic, :none]
@@ -38,6 +38,72 @@ module KLib
 			:bright =>    1,
 			:underline => 4
 		}
+		
+	end
+	
+end
+
+class String
+	
+	def colorize(hash_args = {})
+		KLib::ColorString.new(self, hash_args)
+	end
+	
+	def interpolate(*inter_strings)
+		KLib::ColorString.new(self, *inter_strings)
+	end
+	
+	KLib::ColorString::COLORS.keys.each do |col|
+		define_method(col) { colorize(:foreground => col) }
+	end
+	
+	KLib::ColorString::COLORS.keys.each do |col_1|
+		KLib::ColorString::COLORS.keys.each do |col_2|
+			define_method(:"#{col_1}_#{col_2}") { colorize(:foreground => col_1, :background => col_2) }
+		end
+	end
+	
+	def rjust(length, pad_str = ' ')
+		KLib::ArgumentChecking.type_check(length, 'length', Integer)
+		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
+		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
+		
+		my_length = self.de_color.length
+		add_length = (length - my_length < 0 ? 0 : length - my_length)
+		((pad_str * add_length) + self)
+	end
+	
+	def ljust(length, pad_str = ' ')
+		KLib::ArgumentChecking.type_check(length, 'length', Integer)
+		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
+		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
+		
+		my_length = self.de_color.length
+		add_length = (length - my_length < 0 ? 0 : length - my_length)
+		(self + (pad_str * add_length))
+	end
+	
+	def center(length, pad_str = ' ')
+		KLib::ArgumentChecking.type_check(length, 'length', Integer)
+		KLib::ArgumentChecking.type_check(pad_str, 'pad_str', String)
+		raise ArgumentError.new("'pad_str' must have a length of 1") unless pad_str.length == 1
+		
+		my_length = self.de_color.length
+		add_length = (length - my_length < 0 ? 0 : length - my_length)
+		left = add_length / 2
+		right = add_length - left
+		((pad_str * left) + self + (pad_str * right))
+	end
+	
+	def de_color
+		self.gsub(/\e\[(\d+)(;\d+)*m/, '')
+	end
+
+end
+
+module KLib
+	
+	class ColorString
 		
 		class Modifiers
 			
@@ -85,7 +151,15 @@ module KLib
 			end
 			str << modifiers.to_s << split_string[-1] <<  CLEAR_COLORS
 			
-			@str = COLOR_MODE == :none ? str.gsub(/\e\[(\d+)(;\d+)*m/, '') : str
+			@str = COLOR_MODE == :none ? str.de_color : str
+		end
+		
+		def method_missing(sym, *args)
+			@str.send(sym, *args)
+		end
+		
+		def inspect
+			@str.inspect
 		end
 		
 		def to_s
@@ -96,24 +170,4 @@ module KLib
 
 end
 
-class String
-	
-	def colorize(hash_args = {})
-		KLib::ColorString.new(self, hash_args)
-	end
-	
-	def interpolate(*inter_strings)
-		KLib::ColorString.new(self, *inter_strings)
-	end
-	
-	KLib::ColorString::COLORS.keys.each do |col|
-		define_method(col) { colorize(:foreground => col) }
-	end
-	
-	KLib::ColorString::COLORS.keys.each do |col_1|
-		KLib::ColorString::COLORS.keys.each do |col_2|
-			define_method(:"#{col_1}_#{col_2}") { colorize(:foreground => col_1, :background => col_2) }
-		end
-	end
-	
-end
+
