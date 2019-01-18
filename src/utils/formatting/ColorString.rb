@@ -152,9 +152,9 @@ module KLib
 			
 			str = CLEAR_COLORS.dup
 			inter_strings.length.times do |idx|
-				str << modifiers.to_s << split_string[idx] << inter_strings[idx].to_s
+				str << modifiers.to_s << split_string[idx].gsub("\n", "#{CLEAR_COLORS}\n#{modifiers.to_s}") << inter_strings[idx].to_s
 			end
-			str << modifiers.to_s << split_string[-1] <<  CLEAR_COLORS
+			str << modifiers.to_s << split_string[-1].gsub("\n", "#{CLEAR_COLORS}\n#{modifiers.to_s}") <<  CLEAR_COLORS
 			
 			@str = COLOR_MODE == :none ? str.de_color : str
 		end
@@ -175,4 +175,4 @@ module KLib
 
 end
 
-
+puts("Kalin\nRudnicki".red.gsub(/\n/, "\n|-> "))
