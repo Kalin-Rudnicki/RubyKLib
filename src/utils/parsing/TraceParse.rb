@@ -7,9 +7,10 @@ module KLib
 	
 	class Trace
 		
-		attr_reader :line_num, :method, :file
+		attr_reader :line_num, :method, :file, :str
 		
 		def initialize(str)
+			@str = str
 			split = str.split(':in ')
 			last_colon  = split[0].rindex(':')
 			

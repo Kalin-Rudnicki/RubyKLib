@@ -3,6 +3,7 @@ Dir.chdir(File.dirname(__FILE__)) do
 	require 'set'
 	require './../validation/ArgumentChecking'
 	require './../validation/HashNormalizer'
+	require './../formatting/ColorString'
 end
 
 module KLib
@@ -18,6 +19,27 @@ module KLib
 				ArgumentChecking.type_check(name, 'name', Symbol)
 				@priority = priority
 				@name = name
+				self.output_name = name
+				@color = :default
+			end
+			
+			def output_name= (name)
+				ArgumentChecking.type_check(name, 'name', Symbol)
+				@output_name = name.to_s
+				nil
+			end
+			
+			def output_name
+				@output_name
+			end
+			
+			def output
+				@output_name.send(@color)
+			end
+			
+			def color= (color_name)
+				ArgumentChecking.type_check(color_name, 'color_name', Symbol)
+				@color = color_name
 			end
 			
 			def <=> (other_level)
@@ -37,7 +59,7 @@ module KLib
 					raise DuplicateLevelError.new(level_name) if @levels.key?(level_name)
 					@levels[level_name] = LogLevel.new(@levels.size + 1, level_name)
 				end
-				@max_length = @levels.values.max { |l1, l2| l1.name.to_s.length <=> l2.name.to_s.length }.name.to_s.length
+				calc_max_length
 			end
 			
 			def [] (name)
@@ -49,6 +71,32 @@ module KLib
 			def valid_levels
 				@levels.keys
 			end
+			
+			def alias_level(level_name, new_name)
+				ArgumentChecking.type_check(level_name, 'level_name', Symbol)
+				raise ArgumentError.new("No such level '#{level_name}'") unless @levels.key?(level_name)
+				
+				@levels[level_name].output_name = new_name
+				calc_max_length
+				
+				nil
+			end
+			
+			def color_level(level_name, color_name)
+				ArgumentChecking.type_check(level_name, 'level_name', Symbol)
+				raise ArgumentError.new("No such level '#{level_name}'") unless @levels.key?(level_name)
+			
+				@levels[level_name].color = color_name
+				
+				nil
+			end
+			
+			private
+				
+				def calc_max_length
+					@max_length = @levels.values.max { |l1, l2| l1.output_name.length <=> l2.output_name.length }.output_name.length
+					nil
+				end
 			
 			class DuplicateLevelError < RuntimeError
 				attr_reader :level_name
@@ -70,11 +118,33 @@ module KLib
 			
 		end
 		
-		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :error, :fatal, :always, :off)
+		DEFAULT_LOG_LEVEL_MANAGER = KLib::Logging::LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :warning, :error, :fatal, :always, :off)
+		
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:never, :NEVER)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:debug, :DEBUG)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:detailed, :DETLD)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:info, :INFO)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:print, :PRINT)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:important, :IMPRT)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:error, :ERROR)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:warning, :WARN)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:fatal, :FATAL)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:always, :ALWYS)
+		DEFAULT_LOG_LEVEL_MANAGER.alias_level(:off, :OFF)
+		
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:never, :blue)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:debug, :cyan)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:detailed, :green)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:info, :green)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:print, :default)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:important, :yellow)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:warning, :yellow)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:error, :red)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:fatal, :red)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:always, :default)
+		DEFAULT_LOG_LEVEL_MANAGER.color_level(:off, :blue)
 		
 		class Logger
-			
-			DEFAULT_INDENT = '    '
 			
 			attr_reader :indent
 			
@@ -86,11 +156,11 @@ module KLib
 					norm.default_out(:out).default_value($stdout).type_check(::IO, ::String)
 					norm.default_err(:err).default_value($stderr).type_check(::IO, ::String)
 					
-					norm.indent_string(:indent).default_value(::KLib::Logging::Logger::DEFAULT_INDENT).type_check(::String)
+					norm.indent_string(:indent).default_value('    ').type_check(::String)
 					
 					norm.display_level.default_value(true).type_check(::Boolean)
 					norm.display_thread.default_value(false).type_check(::Boolean)
-					norm.display_time.default_value(true).type_check(::Boolean)
+					norm.display_time.default_value(false).type_check(::Boolean)
 				end
 				
 				@log_level_manager = hash_args[:level_manager]
@@ -157,8 +227,8 @@ module KLib
 					norm.rule.default_value(:default).type_check(::Symbol)
 					norm.time.default_value(Time.now).type_check(::Time)
 				end
-				raise NoSuchRuleError.new(hash_args[:rule]) unless @log_tolerances.key?(hash_args[:rule])
-				log_tolerance = @log_tolerances[hash_args[:rule]]
+				
+				log_tolerance = @log_tolerances.key?(hash_args[:rule]) ? @log_tolerances[hash_args[:rule]] : @log_tolerances[:default]
 				log_level = @log_level_manager[log_level_name]
 				
 				range = (log_level <=> log_tolerance) >= 0 ? :over : :under
@@ -220,13 +290,6 @@ module KLib
 					super("Source already added: #{source}")
 				end
 			end
-			class NoSuchRuleError < RuntimeError
-				attr_reader :rule_name
-				def initialize(rule_name)
-					@rule_name = rule_name
-					super("No such rule: '#{rule_name}'")
-				end
-			end
 			
 			private
 			
@@ -243,7 +306,7 @@ module KLib
 					
 					def build
 						str = "#{@str}] "
-						return str, "[#{' ' * (str.length - 3)}] "
+						return str, "[#{' ' * (str.gsub(/\e\[(\d+)(;\d+)*m/, '').length - 3)}] "
 					end
 					
 				end
@@ -275,7 +338,7 @@ module KLib
 				def log_headers(level, time)
 					if @display_params.any? { |k, v| v }
 						header = HeaderBuilder.new
-						header << level.name.to_s.upcase.ljust(@log_level_manager.max_length) if @display_params[:level]
+						header << (level.output.to_s + (' ' * (@log_level_manager.max_length - level.output_name.length))) if @display_params[:level]
 						header << "T_#{Thread.current.object_id}" if @display_params[:thread]
 						header << time.strftime('%m/%d/%y - %I:%M:%S.%L %p') if @display_params[:time]
 						return header.build

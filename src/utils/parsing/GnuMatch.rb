@@ -17,6 +17,8 @@ module KLib
 				matches << opt if opt.start_with?(string)
 			end
 			
+			$gnu_matches = matches
+			
 			matches.length == 1 ? matches.first : nil
 		end
 		
@@ -44,6 +46,8 @@ module KLib
 				end
 				matches << orig if valid
 			end
+			
+			$gnu_matches = matches
 			
 			matches.length == 1 ? matches.first : nil
 		end
