@@ -765,13 +765,13 @@ module KLib
 						split = @data[:mode].to_s.split('_')
 						if split[0].length == 0
 							param = [
-								@short.any? ? "-[#{@short[false]}]#{@short[true]}".magenta : nil,
+								@short.any? ? "-[#{@short[@data[:flip]]}]#{@short[!@data[:flip]]}".magenta : nil,
 								"--[#{split[1]}-]#{@base_name.tr('_', '-')}".magenta,
 								nil
 							]
 						else
 							param = [
-								@short.any? ? "-{#{@short[false]}/#{@short[true]}}".magenta : nil,
+								@short.any? ? "-{#{@short[@data[:flip]]}/#{@short[!@data[:flip]]}}".magenta : nil,
 								"--{#{split[1]}/#{split[0]}}#{@base_name.tr('_', '-')}".magenta,
 								nil
 							]
@@ -844,6 +844,8 @@ module KLib
 								$cli_log.log(:fatal, "Error normalizing '#{@base_name.tr('_', '-')}'\n\t#{e.message}")
 								raise ParseError.new
 							end
+						elsif type == :array
+							val = val.map { |v| ParameterSpec.try_convert(v, false) }
 						elsif @type == :boolean
 						else
 							unless @data[:pre_convert_validate].nil?
