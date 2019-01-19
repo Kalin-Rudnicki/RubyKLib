@@ -31,7 +31,7 @@ module KLib
 			
 			matches = []
 			options_split.each_pair do |orig, split|
-				return orig if split == orig
+				return orig if string == orig
 				if orig.start_with?(string)
 					matches << orig
 					next
