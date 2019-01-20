@@ -468,7 +468,7 @@ module KLib
 				end
 				raise ParseError if errors
 				
-				@method_info[:method].call(*@method_info[:names].map { |name| @parameters[name].value }, *rest.map { |a| a.value })
+				@method_info[:method].call(*@method_info[:names].map { |name| @parameters[name].value }, *rest.map { |a| ParameterSpec.try_convert(a.value, false) })
 			end
 			
 			class ParseError < RuntimeError
