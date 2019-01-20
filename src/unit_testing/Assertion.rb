@@ -9,6 +9,44 @@ module KLib
 		
 		module Assertions
 			
+			class AssertionReport
+				
+				attr_reader :fails, :passes, :errors
+				
+				def initialize(passes, fails, errors)
+					@passes = passes
+					@fails = fails
+					@errors = errors
+				end
+				
+				def total
+					@passes + @fails
+				end
+				
+				def join(other_report)
+					ArgumentChecking.type_check(other_report, 'other_report', AssertionReport)
+					AssertionReport.new(self.passes + other_report.passes, self.fails + other_report.fails, self.errors + other_report.errors)
+				end
+				
+				def self.join(reports)
+					ArgumentChecking.type_check_each(reports, 'reports', AssertionReport)
+					passes = 0
+					fails = 0
+					errors = 0
+					reports.each do |report|
+						passes += report.passes
+						fails += report.fails
+						errors += report.errors
+					end
+					AssertionReport.new(passes, fails, errors)
+				end
+				
+				def inspect
+					"#<AssertionReport: @passes=#{@passes.inspect}, @fails=#{@fails.inspect}, @errors=#{@errors.inspect}>"
+				end
+			
+			end
+			
 			class Assertion
 				
 				attr_reader :type, :passed, :message, :error
@@ -22,6 +60,10 @@ module KLib
 					@passed = passed
 					@message = message
 					@error = error
+				end
+				
+				def inspect
+					"#<#{self.class.name.split('::')[-1]}#{self.instance_variables.any? ? ": #{self.instance_variables.map { |var| "#{var}=#{self.instance_variable_get(var).inspect}" }.join(', ')}" : ""}>"
 				end
 			
 			end
