@@ -1,6 +1,6 @@
 
 Dir.chdir(File.dirname(__FILE__)) do
-	require './../validation/ArgumentChecking'
+	require './../validation/HashNormalizer'
 end
 
 module KLib
@@ -9,9 +9,12 @@ module KLib
 		
 		class << self
 		
-			def snatch_io(grab_constants = true, &block)
+			def snatch_io(hash_args = {}, &block)
 				raise ArgumentError.new('You must supply a block to this method') unless block_given?
-				ArgumentChecking.boolean_check(grab_constants, 'grab_constants')
+				hash_args = HashNormalizer.normalize(hash_args) do |norm|
+					norm.replace_constants.boolean_check.default_value(true)
+					norm.preserve_raised.boolean_check.default_value(false)
+				end
 				
 				stdout = $stdout
 				stderr = $stderr
@@ -22,7 +25,7 @@ module KLib
 				$stdout = out_write
 				$stderr = err_write
 				
-				if grab_constants
+				if hash_args[:replace_constants]
 					Object.send(:remove_const, :STDOUT)
 					Object.const_set(:STDOUT, out_write)
 					Object.send(:remove_const, :STDERR)
@@ -42,7 +45,7 @@ module KLib
 					$stdout = stdout
 					$stderr = stderr
 					
-					if grab_constants
+					if hash_args[:replace_constants]
 						Object.send(:remove_const, :STDOUT)
 						Object.const_set(:STDOUT, stdout)
 						Object.send(:remove_const, :STDERR)
@@ -50,9 +53,9 @@ module KLib
 					end
 				end
 				
-				raise error unless error.nil?
+				raise error if !hash_args[:preserve_raised] && !error.nil?
 				
-				[out_read, err_read]
+				[out_read, err_read, error]
 			end
 		
 		end
