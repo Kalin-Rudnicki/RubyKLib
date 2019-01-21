@@ -126,7 +126,11 @@ module KLib
 							name = var.__name.to_s
 							if var.__args.any?
 								value = value.__send__(*var.__args)
-								name = "#{name}.#{var.__args[0]}#{var.__args.length > 1 ? "(#{var.__args[1..-1].map { |a| a.inspect }.join(', ')})" : ""}"
+								if var.__args[0] == :[]
+									name = "#{name}[#{var.__args.length > 1 ? "#{var.__args[1..-1].map { |a| a.inspect }.join(', ')}" : ""}]"
+								else
+									name = "#{name}.#{var.__args[0]}#{var.__args.length > 1 ? "(#{var.__args[1..-1].map { |a| a.inspect }.join(', ')})" : ""}"
+								end
 							end
 							unless ::KLib::ArgumentChecking.send(method, value, name, *args)
 								errors << "Failed to validate: ArgumentChecking.#{method}(#{var.__name.to_s}, '#{var.__name.to_s}'#{args.map { |arg| ", #{arg.inspect}" }})"
