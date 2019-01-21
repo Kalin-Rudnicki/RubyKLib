@@ -96,9 +96,9 @@ module KLib
 					result = block.(*args)
 					case result
 						when ArgumentCheckError
-							raise result
+							raise_not_me result
 						when String
-							raise ArgumentCheckError.new(result)
+							raise_not_me ArgumentCheckError.new(result)
 						when NilClass
 							# Do nothing on purpose
 						else

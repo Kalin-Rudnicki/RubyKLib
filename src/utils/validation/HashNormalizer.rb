@@ -3,6 +3,7 @@ Dir.chdir(File.dirname(__FILE__)) do
 	require 'set'
 	require './ArgumentChecking'
 	require './../formatting/CaseConversion'
+	require './../general/RaiseNotMe'
 	require './../version_compat/BasicObject'
 end
 
@@ -156,6 +157,9 @@ module KLib
 					self
 				end
 				
+				# Recursive :)
+				# TODO: def normalize
+				
 			end
 			
 			class FinalizedArg
@@ -273,24 +277,30 @@ module KLib
 					
 					# Do argument checking and validation
 					found_args.each_pair do |arg, from_key|
-						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, source[from_key], hash_args[:name_proc].call(from_key), *value)
+						RaiseNotMe.ignore_me do
+							arg.checks.__checks.each_pair do |method, value|
+								ArgumentChecking.send(method, source[from_key], hash_args[:name_proc].call(from_key), *value)
+							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(source[from_key])
 							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_value].each do |arg|
-						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
+						RaiseNotMe.ignore_me do
+							arg.checks.__checks.each_pair do |method, value|
+								ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
+							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(arg.missing[:value])
 							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_from_key].each do |arg|
-						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
+						RaiseNotMe.ignore_me do
+							arg.checks.__checks.each_pair do |method, value|
+								ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
+							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(valid_default_keys[from_to[arg.missing[:value]]])
 							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
