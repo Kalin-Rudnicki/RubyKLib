@@ -16,13 +16,10 @@ module KLib
 			else
 				raise ArgumentError.new("No explicit conversion of [#{exception.class.inspect}] to one of [String, Exception].")
 			end
-			puts Trace.call_trace(false)
 			trace = KLib::Trace.call_trace
 			
 			ignore = ([trace[0].file] + RAISE_IGNORE).uniq
 			KLib::RAISE_IGNORE.clear
-			
-			puts("ignoring: #{ignore.inspect}")
 			
 			if !ENV.key?('RAISE_NOT_ME') && trace.any? { |t| !ignore.include?(t.file) }
 				trace = trace.select { |t| !ignore.include?(t.file) }

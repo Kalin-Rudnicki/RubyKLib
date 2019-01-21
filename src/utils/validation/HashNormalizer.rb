@@ -238,7 +238,7 @@ module KLib
 						multi_mapped_keys |= similar_keys.to_a
 						all_mappings |= arg.search_keys
 					end
-					raise DuplicateMappedKeyError.new(multi_mapped_keys.to_a) if multi_mapped_keys.any?
+					raise_not_me DuplicateMappedKeyError.new(multi_mapped_keys.to_a) if multi_mapped_keys.any?
 					
 					# Create hashes for referencing arguments
 					from_to = finalized_args.map { |arg| arg.search_keys.map { |key| [key, arg.destination] } }.flatten(1).to_h
@@ -257,7 +257,7 @@ module KLib
 						end
 						extra_keys << key unless found
 					end
-					raise IllegalExtraKeysError.new(extra_keys) if extra_keys.any? && !hash_args[:allow_extras]
+					raise_not_me IllegalExtraKeysError.new(extra_keys) if extra_keys.any? && !hash_args[:allow_extras]
 					
 					# Split up args into found and not-found
 					found_args = mapped_by.select { |k, v| !v.nil? }
@@ -266,14 +266,14 @@ module KLib
 					non_found_args.each { |arg| non_found_partition[arg.missing[:mode]] << arg }
 					
 					# Make sure that all required arguments have been supplied
-					raise MissingRequiredArgsError.new(non_found_partition[:required]) if non_found_partition[:required].any?
+					raise_not_me MissingRequiredArgsError.new(non_found_partition[:required]) if non_found_partition[:required].any?
 					
 					# Make sure that there are not default_from_key's pointing at keys that are not guaranteed to exist
 					valid_default_keys = {}
 					found_args.each_pair { |arg, from_key| valid_default_keys[arg.destination] = source[from_key] }
 					non_found_partition[:default_value].each { |arg| valid_default_keys[arg.destination] = arg.missing[:value] }
 					illegal_default_key_args = non_found_partition[:default_from_key].select { |arg| !valid_default_keys.keys.include?(from_to[arg.missing[:value]]) }
-					raise NoSuchDefaultFromKeyError.new(illegal_default_key_args) if illegal_default_key_args.any?
+					raise_not_me NoSuchDefaultFromKeyError.new(illegal_default_key_args) if illegal_default_key_args.any?
 					
 					# Do argument checking and validation
 					found_args.each_pair do |arg, from_key|
@@ -283,7 +283,7 @@ module KLib
 							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(source[from_key])
-							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
+							raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_value].each do |arg|
@@ -293,7 +293,7 @@ module KLib
 							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(arg.missing[:value])
-							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
+							raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_from_key].each do |arg|
@@ -303,7 +303,7 @@ module KLib
 							end
 						end
 						unless arg.validate.nil? || arg.validate[:validator].call(valid_default_keys[from_to[arg.missing[:value]]])
-							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
+							raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
 						end
 					end
 					
