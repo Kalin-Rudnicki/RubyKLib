@@ -67,7 +67,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::EqualAssertion.new(equal, message, expected, actual, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::EqualAssertion.new(equal, message, expected, actual, error, Trace.call_trace[0])
 					
 					equal
 				end
@@ -85,7 +85,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::NotEqualAssertion.new(unequal, message, expected, actual, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::NotEqualAssertion.new(unequal, message, expected, actual, error, Trace.call_trace[0])
 					
 					unequal
 				end
@@ -108,7 +108,7 @@ module KLib
 						raised = false
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::RaisedAssertion.new(raised, message, exception, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::RaisedAssertion.new(raised, message, exception, error, Trace.call_trace[0])
 					
 					raised
 				end
@@ -131,7 +131,7 @@ module KLib
 						raised = false
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::NotRaisedAssertion.new(!raised, message, exception, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::NotRaisedAssertion.new(!raised, message, exception, error, Trace.call_trace[0])
 					
 					!raised
 				end
@@ -147,7 +147,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::TrueAssertion.new(passed, message, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::TrueAssertion.new(passed, message, error, Trace.call_trace[0])
 					
 					passed
 				end
@@ -163,7 +163,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::FalseAssertion.new(passed, message, error)
+					@__assertions[Trace.call_trace[0].method] << Assertions::FalseAssertion.new(passed, message, error, Trace.call_trace[0])
 					
 					passed
 				end

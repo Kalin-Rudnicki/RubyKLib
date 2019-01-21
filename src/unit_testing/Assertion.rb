@@ -49,17 +49,23 @@ module KLib
 			
 			class Assertion
 				
-				attr_reader :type, :passed, :message, :error
+				attr_reader :type, :passed, :message, :error, :caller_loc
 				
-				def initialize(type, passed, message, error)
+				def initialize(type, passed, message, error, caller_loc)
 					ArgumentChecking.enum_check(type, 'type', :equal, :not_equal, :raised, :not_raised, :true, :false)
 					ArgumentChecking.boolean_check(passed, 'passed')
 					ArgumentChecking.type_check(message, 'message', NilClass, String)
 					ArgumentChecking.type_check(error, 'error', NilClass, Exception)
+					ArgumentChecking.type_check(caller_loc, 'caller_loc', Trace)
 					@type = type
 					@passed = passed
 					@message = message
 					@error = error
+					@caller_loc = caller_loc
+				end
+				
+				def to_s
+					"#<#{self.class.name.split('::')[-1]}: @passed=#{@passed}, from: #{File.basename(@caller_loc.file)}:#{@caller_loc.line_num}#{@error.nil? ? '' : ", @error=#{@error.inspect}"}>"
 				end
 				
 				def inspect
@@ -72,8 +78,8 @@ module KLib
 				
 				attr_reader :actual, :expected
 				
-				def initialize(passed, message, expected, actual, error)
-					super(:equal, passed, message, error)
+				def initialize(passed, message, expected, actual, error, caller_loc)
+					super(:equal, passed, message, error, caller_loc)
 					@expected = expected
 					@actual = actual
 				end
@@ -84,8 +90,8 @@ module KLib
 				
 				attr_reader :actual, :expected
 				
-				def initialize(passed, message, expected, actual, error)
-					super(:not_equal, passed, message, error)
+				def initialize(passed, message, expected, actual, error, caller_loc)
+					super(:not_equal, passed, message, error, caller_loc)
 					@expected = expected
 					@actual = actual
 				end
@@ -96,8 +102,8 @@ module KLib
 				
 				attr_reader :exception
 				
-				def initialize(passed, message, exception, error)
-					super(:raised, passed, message, error)
+				def initialize(passed, message, exception, error, caller_loc)
+					super(:raised, passed, message, error, caller_loc)
 					@exception = exception
 				end
 			
@@ -107,22 +113,22 @@ module KLib
 				
 				attr_reader :exception
 				
-				def initialize(passed, message, exception, error)
-					super(:raised, passed, message, error)
+				def initialize(passed, message, exception, error, caller_loc)
+					super(:raised, passed, message, error, caller_loc)
 					@exception = exception
 				end
 			
 			end
 			
 			class TrueAssertion < Assertion
-				def initialize(passed, message, error)
-					super(:true, passed, message, error)
+				def initialize(passed, message, error, caller_loc)
+					super(:true, passed, message, error, caller_loc)
 				end
 			end
 			
 			class FalseAssertion < Assertion
-				def initialize(passed, message, error)
-					super(:false, passed, message, error)
+				def initialize(passed, message, error, caller_loc)
+					super(:false, passed, message, error, caller_loc)
 				end
 			end
 			

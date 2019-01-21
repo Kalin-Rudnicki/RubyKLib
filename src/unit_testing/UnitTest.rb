@@ -118,7 +118,7 @@ module KLib
 					inst.__assertions.each_pair do |method_name, assertions|
 						logger.log(:detailed, "'#{method_name}'")
 						logger.indent + 1
-						assertions.each { |assert| logger.log(:detailed, assert.inspect) }
+						assertions.each { |assert| logger.log(:detailed, assert.to_s) }
 						logger.indent - 1
 					end
 					logger.indent - 1
