@@ -133,7 +133,39 @@ module KLib
 					end
 					@__assertions[Trace.call_trace[0].method] << Assertions::NotRaisedAssertion.new(!raised, message, exception, error)
 					
-					raised
+					!raised
+				end
+				
+				def assert_true(value, message = nil)
+					raise "You can not call assertions until your initializer has finished" unless self.instance_variable_defined?(:@__assertions)
+					
+					begin
+						passed = (value == true)
+					rescue => e
+						passed = false
+						error = e
+					else
+						error = nil
+					end
+					@__assertions[Trace.call_trace[0].method] << Assertions::TrueAssertion.new(passed, message, error)
+					
+					passed
+				end
+				
+				def assert_false(value, message = nil)
+					raise "You can not call assertions until your initializer has finished" unless self.instance_variable_defined?(:@__assertions)
+					
+					begin
+						passed = (value == false)
+					rescue => e
+						passed = false
+						error = e
+					else
+						error = nil
+					end
+					@__assertions[Trace.call_trace[0].method] << Assertions::FalseAssertion.new(passed, message, error)
+					
+					passed
 				end
 			
 			class MethodManager < BasicObject

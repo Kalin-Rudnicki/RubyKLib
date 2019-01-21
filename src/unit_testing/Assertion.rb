@@ -52,7 +52,7 @@ module KLib
 				attr_reader :type, :passed, :message, :error
 				
 				def initialize(type, passed, message, error)
-					ArgumentChecking.enum_check(type, 'type', :equal, :not_equal, :raised, :not_raised)
+					ArgumentChecking.enum_check(type, 'type', :equal, :not_equal, :raised, :not_raised, :true, :false)
 					ArgumentChecking.boolean_check(passed, 'passed')
 					ArgumentChecking.type_check(message, 'message', NilClass, String)
 					ArgumentChecking.type_check(error, 'error', NilClass, Exception)
@@ -112,6 +112,18 @@ module KLib
 					@exception = exception
 				end
 			
+			end
+			
+			class TrueAssertion < Assertion
+				def initialize(passed, message, error)
+					super(:true, passed, message, error)
+				end
+			end
+			
+			class FalseAssertion < Assertion
+				def initialize(passed, message, error)
+					super(:false, passed, message, error)
+				end
 			end
 			
 		end
