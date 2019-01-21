@@ -20,8 +20,8 @@ module KLib
 		class << self
 			
 			def check(&block)
-				raise InvalidValidationError.new('You must supply a block when checking...') unless block_given?
-				self.module_eval(&block)
+				CheckBuilderManager.new(&block)
+				true
 			end
 			
 			def type_check(obj, name, *valid_types, &block)
@@ -108,6 +108,67 @@ module KLib
 		
 		end
 	
+		class CheckBuilderManager < BasicObject
+			
+			def initialize(&block)
+				::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("You must supply a block to initialize a CheckBuilderManager") unless ::Kernel.block_given?
+				@binding = block.binding
+				@variables = []
+				block.call(self)
+				
+				errors = []
+				@variables.each do |var|
+					var.__checks.each_pair do |method, args|
+						begin
+							unless ::KLib::ArgumentChecking.send(method, @binding.local_variable_get(var.__name), var.__name.to_s, *args)
+								errors << "Failed to validate: ArgumentChecking.#{method}(#{var.__name.to_s}, '#{var.__name.to_s}'#{args.map { |arg| ", #{arg.inspect}" }})"
+							end
+						rescue ::KLib::ArgumentChecking::ArgumentCheckError => e
+							errors << e.message
+						end
+					end
+				end
+				if errors.any?
+					::Kernel.raise ::KLib::ArgumentChecking::ArgumentCheckError.new("Failed to validate:\n#{errors.join("\n")}")
+				end
+			end
+			
+			def method_missing(sym, &block)#, *args)
+				::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("No local variable defined: '#{sym}'") unless @binding.local_variable_defined?(sym)
+				#::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("No local variable defined: '#{sym}'") if args.any?
+				added = CheckBuilder.new(sym, &block)
+				@variables << added
+				added
+			end
+			
+			class CheckBuilder < BasicObject
+				
+				def initialize(name, &block)
+					@name = name
+					@checks = {}
+					block.call(self) unless block.nil?
+				end
+				
+				def method_missing(sym, *args)
+					::KLib::ArgumentChecking.type_check(sym, 'sym', ::Symbol)
+					::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("You can not re-call 'check'") if sym == :check
+					::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("KLib::ArgumentChecking does not have method '#{sym}'") unless ::KLib::ArgumentChecking.methods.include?(sym)
+					@checks[sym] = args
+					self
+				end
+				
+				def __name
+					@name
+				end
+				
+				def __checks
+					@checks
+				end
+				
+			end
+			
+		end
+		
 	end
 
 end
