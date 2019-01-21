@@ -29,10 +29,10 @@ module KLib
 				@args.map { |arg| arg.__finalize(defaults) }
 			end
 			
-			def method_missing(sym, *alternatives)
+			def method_missing(sym, *alternatives, &block)
 				::Kernel::raise ::ArgumentError.new('Your values can not end in =') if sym.to_s[-1] == '='
 				::KLib::ArgumentChecking.type_check_each(alternatives, 'alternatives', ::String, ::Symbol)
-				arg = ::KLib::HashNormalizer::NormalizerManager::Arg.new(sym, alternatives)
+				arg = ::KLib::HashNormalizer::NormalizerManager::Arg.new(sym, alternatives, &block)
 				@args << arg
 				arg
 			end
@@ -40,16 +40,18 @@ module KLib
 			class Arg < BasicObject
 				
 				# TODO: default missing action [:no_default, :required, :nil]
-				def initialize(destination, additional)
+				def initialize(destination, additional, &block)
 					@destination = destination
 					@additional = additional
-					@settings = {
-						:missing => {
-							:mode => :no_default,
-							:value => nil
-						},
-						:checks => {}
+					@missing = {
+						:mode => :no_default,
+						:value => nil
 					}
+					@checks = ::KLib::ArgumentChecking::CheckBuilderManager::CheckBuilder.new(@destination)
+					@validate = nil
+					@transform = nil
+					
+					block.call(self) unless block.nil?
 				end
 				
 				def __finalize(defaults)
@@ -100,69 +102,57 @@ module KLib
 						else
 							raise "[#{defaults[:keys_as]}] is not a valid value for :keys_as"
 					end
-					FinalizedArg.new(dest, vals, @settings[:missing], @settings[:checks])
+					FinalizedArg.new(dest, vals, @missing, @checks, @validate, @transform)
 				end
 				
 				# Defaults
 				
 				def no_default
-					@settings[:missing][:mode] = :no_default
-					@settings[:missing][:value] = nil
+					@missing[:mode] = :no_default
+					@missing[:value] = nil
 					self
 				end
 				
 				def required
-					@settings[:missing][:mode] = :required
-					@settings[:missing][:value] = nil
+					@missing[:mode] = :required
+					@missing[:value] = nil
 					self
 				end
 				
 				def default_value(value)
-					@settings[:missing][:mode] = :default_value
-					@settings[:missing][:value] = value
+					@missing[:mode] = :default_value
+					@missing[:value] = value
 					self
 				end
 				
 				def default_from_key(key)
-					@settings[:missing][:mode] = :default_from_key
-					@settings[:missing][:value] = key
+					@missing[:mode] = :default_from_key
+					@missing[:value] = key
 					self
 				end
 				
 				# Argument Checking
 				
-				def type_check(*valid_args)
-					@settings[:checks][:type_check] = valid_args
+				def method_missing(sym, *args)
+					@checks.method_missing(sym, *args)
 					self
 				end
 				
-				def type_check_each(*valid_args)
-					@settings[:checks][:type_check_each] = valid_args
+				# Other
+				
+				def validate(on_fail, &block)
+					raise ArgumentError.new("You must supply a block for validation") unless ::Kernel.block_given?
+					::KLib::ArgumentChecking.type_check(on_fail, 'on_fail', ::String, ::Proc)
+					@validate = {
+						:validator => block,
+						:on_fail => on_fail
+					}
 					self
 				end
 				
-				def enum_check(*valid_args)
-					@settings[:checks][:enum_check] = valid_args
-					self
-				end
-				
-				def enum_check_each(*valid_args)
-					@settings[:checks][:enum_check_each] = valid_args
-					self
-				end
-				
-				def respond_to_check(*required_args)
-					@settings[:checks][:respond_to_check] = required_args
-					self
-				end
-				
-				def boolean_check
-					@settings[:checks][:boolean_check] = []
-					self
-				end
-				
-				def nil_check
-					@settings[:checks][:nil_check] = []
+				def transform(&block)
+					raise ArgumentError.new("You must supply a block for transformation") unless ::Kernel.block_given?
+					@transform = block
 					self
 				end
 				
@@ -170,13 +160,15 @@ module KLib
 			
 			class FinalizedArg
 				
-				attr_reader :destination, :search_keys, :missing, :checks
+				attr_reader :destination, :search_keys, :missing, :checks, :validate, :transform
 				
-				def initialize(destination, search_keys, missing, checks)
+				def initialize(destination, search_keys, missing, checks, validate, transform)
 					@destination = destination
 					@search_keys = search_keys
 					@missing = missing
 					@checks = checks
+					@validate = validate
+					@transform = transform
 				end
 				
 			end
@@ -221,14 +213,13 @@ module KLib
 				
 				def hash_normalize(target, source, hash_args, &block)
 					raise ArgumentError.new("You must supply a block in order to normalize.") unless block_given?
-					ArgumentChecking.check do
-						respond_to_check(target, 'target', :[]=, :delete, :each_pair)
-						respond_to_check(source, 'source', :[], :keys, :key?)
+					ArgumentChecking.check do |check|
+						check.target.respond_to_check(:[]=, :delete, :each_pair)
+						check.source.respond_to_check(:[], :keys, :key?)
 						
-						type_check(hash_args, 'hash_args', Hash)
-						enum_check_each(hash_args.keys, 'hash_args.keys', DEFAULT_SETTINGS.keys)
 						# TODO => ArgumentChecking on hash_args
 					end
+					ArgumentChecking.enum_check_each(hash_args.keys, 'hash_args.keys', DEFAULT_SETTINGS.keys)
 					
 					# Create manager and get FinalizedArg's
 					manager = NormalizerManager.new
@@ -280,20 +271,29 @@ module KLib
 					illegal_default_key_args = non_found_partition[:default_from_key].select { |arg| !valid_default_keys.keys.include?(from_to[arg.missing[:value]]) }
 					raise NoSuchDefaultFromKeyError.new(illegal_default_key_args) if illegal_default_key_args.any?
 					
-					# Do argument checking
+					# Do argument checking and validation
 					found_args.each_pair do |arg, from_key|
-						arg.checks.each_pair do |method, value|
+						arg.checks.__checks.each_pair do |method, value|
 							ArgumentChecking.send(method, source[from_key], hash_args[:name_proc].call(from_key), *value)
+						end
+						unless arg.validate.nil? || arg.validate[:validator].call(source[from_key])
+							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_value].each do |arg|
-						arg.checks.each_pair do |method, value|
+						arg.checks.__checks.each_pair do |method, value|
 							ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
+						end
+						unless arg.validate.nil? || arg.validate[:validator].call(arg.missing[:value])
+							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
 						end
 					end
 					non_found_partition[:default_from_key].each do |arg|
-						arg.checks.each_pair do |method, value|
+						arg.checks.__checks.each_pair do |method, value|
 							ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
+						end
+						unless arg.validate.nil? || arg.validate[:validator].call(valid_default_keys[from_to[arg.missing[:value]]])
+							raise NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
 						end
 					end
 					
@@ -301,13 +301,24 @@ module KLib
 					found_args.each_pair do |arg, from_key|
 						value = source[from_key]
 						target.delete(from_key) if hash_args[:remove_found]
+						unless arg.transform.nil?
+							value = arg.transform.call(value)
+						end
 						target[arg.destination] = value
 					end
 					non_found_partition[:default_value].each do |arg|
-						target[arg.destination] = arg.missing[:value]
+						value = arg.missing[:value]
+						unless arg.transform.nil?
+							value = arg.transform.call(value)
+						end
+						target[arg.destination] = value
 					end
 					non_found_partition[:default_from_key].each do |arg|
-						target[arg.destination] = valid_default_keys[from_to[arg.missing[:value]]]
+						value = valid_default_keys[from_to[arg.missing[:value]]]
+						unless arg.transform.nil?
+							value = arg.transform.call(value)
+						end
+						target[arg.destination] = value
 					end
 					
 					extra_keys.each do |key|

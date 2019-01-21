@@ -22,19 +22,21 @@ end
 
 proc_1 = proc do |norm|
 
-	norm.first_name(:first).required.type_check(String)
+	norm.first_name(:first).required.type_check(String).validate(proc { |name| "name '#{name}'.length must be > 3" }) { |name| name.length > 3 }
 	norm.last_name(:last).required.type_check(String)
 	
 	norm.name.default_from_key(:first_name).type_check(String)
 	
-	norm.age.required.type_check(Integer)
+	norm.age.required.type_check(Integer).transform { |i| i + 5 }
 	
 	norm.favorite_color(:fav_color, :color).default_value(nil).type_check(NilClass, Symbol)
-
+	
 end
 
 hash_1 = { :first_name => 'Kalin', :last_name => 'Rudnicki', :name => 'Best Programmer', :age => 20 }
 hash_2 = { :first_name => 'Kalin', :last_name => 'Rudnicki', :age => 20 }
+hash_3 = { :first_name => 'Kalin', :last_name => 'Rudnicki', :age => 20 }
 
 run_test(hash_1, &proc_1)
 run_test(hash_2, &proc_1)
+run_test(hash_3, &proc_1)
