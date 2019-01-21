@@ -138,6 +138,19 @@ module KLib
 						end
 					end
 					
+					if inst.__assertions.values.any? { |val| val.any? { |v| !v.passed } }
+						File.open(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/'), inst_num.to_s, "failed_assertions.log"), 'w') do |assert_file|
+							inst.__assertions.each_pair do |method_name, assertions|
+								fails = assertions.select { |assertion| !assertion.passed }
+								if fails.any?
+									assert_file.puts("#{method_name}:")
+									fails.each { |assert| assert_file.puts("\t#{assert.inspect}") }
+									assert_file.puts
+								end
+							end
+						end
+					end
+					
 					joined_assertions.merge!(inst.__assertion_report) { |key, old, new| old.join(new) }
 					
 					logger.break(:type => :close)
