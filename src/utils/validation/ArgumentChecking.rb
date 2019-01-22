@@ -116,8 +116,6 @@ module KLib
 				@variables = []
 				block.call(self)
 				
-				::Kernel.puts @variables.map { |v| v.__name }.inspect
-				
 				errors = []
 				@variables.each do |var|
 					var.__checks.each_pair do |method, args|
@@ -164,8 +162,7 @@ module KLib
 				
 				def method_missing(sym, *args)
 					::KLib::ArgumentChecking.type_check(sym, 'sym', ::Symbol)
-					::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("You can not re-call 'check'") if sym == :check
-					::Kernel.raise ::KLib::ArgumentChecking::InvalidValidationError.new("KLib::ArgumentChecking does not have method '#{sym}'") unless ::KLib::ArgumentChecking.methods.include?(sym)
+					::Kernel.raise ::NoMethodError.new("undefined method '#{sym}' for #{self.class}") unless (sym != :check && ::KLib::ArgumentChecking.methods.include?(sym))
 					@checks[sym] = args
 					self
 				end

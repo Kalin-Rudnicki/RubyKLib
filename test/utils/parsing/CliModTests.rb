@@ -28,16 +28,22 @@ module Test
 	
 	
 	method_spec(:hash) do |spec|
-		spec.hash(:my_hash).data(:normalize => proc do |norm|
-			norm.key_1.required.type_check(Float)
-			norm.key_2.default_value(nil).enum_check(nil, :a, :b, :c)
-			norm.key_3.default_value([]).type_check_each(Integer, Float)
-		end)
+		spec.hash(:my_hash) do |my_hash|
+			my_hash.normalize do |norm|
+				norm.key_1.required.type_check(Float)
+				norm.key_2.default_value(nil).enum_check(nil, :a, :b, :c)
+				norm.key_3.default_value([]).type_check_each(Integer, Float)
+			end
+		end
+		spec.string(:str)
+		spec.int(:other).default_value(nil)
 	end
 	
-	def self.hash(my_hash)
-		puts("    my_hash:")
+	def self.hash(my_hash, str, other)
+		puts("    my_hash: #{my_hash.keys.inspect}")
 		my_hash.each_pair { |k, v| puts("    - #{k.inspect} => #{v.inspect}") }
+		puts("    str: #{str.inspect}")
+		puts("    other: #{other.inspect}")
 	end
 	
 end
