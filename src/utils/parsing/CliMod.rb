@@ -27,7 +27,7 @@ module KLib
 		
 		def parse(args = ARGV)
 			
-			build
+			__build
 			valid_method_names = @valid_methods.values.map { |met| met[:name] }.sort
 			valid_mod_names = @valid_mods.values.map { |mod| mod[:name] }.sort
 			
@@ -203,7 +203,7 @@ module KLib
 				valid_mods
 			end
 			
-			def build
+			def __build
 				return if @built
 				@valid_methods = find_valid_methods
 				@valid_mods = find_valid_mods

@@ -13,7 +13,10 @@ module KLib
 			
 			matches = []
 			options.each do |opt|
-				return opt if string == opt
+				if string == opt
+					$gnu_matches = [opt]
+					return opt
+				end
 				matches << opt if opt.start_with?(string)
 			end
 			
@@ -31,7 +34,10 @@ module KLib
 			
 			matches = []
 			options_split.each_pair do |orig, split|
-				return orig if string == orig
+				if string == orig
+					$gnu_matches = [orig]
+					return orig
+				end
 				if orig.start_with?(string)
 					matches << orig
 					next
