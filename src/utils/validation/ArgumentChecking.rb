@@ -1,4 +1,8 @@
 
+Dir.chdir(File.dirname(__FILE__)) do
+	require './../general/RaiseNotMe'
+end
+
 module Boolean; end
 
 module KLib
@@ -16,6 +20,8 @@ module KLib
 		class RespondToCheckError < ArgumentCheckError; end
 		
 		class NilCheckError < ArgumentCheckError; end
+		
+		class PathCheckError < ArgumentCheckError; end
 		
 		class << self
 			
@@ -87,6 +93,49 @@ module KLib
 			
 			def boolean_check(obj, name, &block)
 				type_check(obj, name, Boolean, &block)
+			end
+			
+			def path_check(path, name, type = :any, &block)
+				valid_types = %i{any file dir exe}
+				raise InvalidValidationError.new("Parameter 'path'. No explicit conversion of [#{path.class.inspect}] to [String].") unless path.is_a?(String)
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'type'. Value [#{type.inspect}] does not exist in #{valid_types.inspect}.") unless valid_types.include?(type)
+				
+				unless File.exists?(path)
+					block ||= proc do |given_path, given_name, given_type|
+						if given_path.tr('\\', '/') == File.expand_path(given_path)
+							PathCheckError.new("Path #{given_name.nil? ? '' : "'#{given_name}' "}(#{given_path}) does not exist.")
+						else
+							PathCheckError.new("Path #{given_name.nil? ? '' : "'#{given_name}' "}(#{given_path}) does not exist in the scope of #{Dir.pwd}.")
+						end
+					end
+					throw_error(path, name, :any, &block)
+					return false
+				end
+				case type
+					when :any
+					when :file
+						unless File.file?(path)
+							block ||= proc { |given_path, given_name, given_type| PathCheckError.new("Path #{given_name.nil? ? '' : "'#{given_name}' "}(#{given_path}) is not a file.") }
+							throw_error(path, name, type, &block)
+							return false
+						end
+					when :dir
+						unless File.directory?(path)
+							block ||= proc { |given_path, given_name, given_type| PathCheckError.new("Path #{given_name.nil? ? '' : "'#{given_name}' "}(#{given_path}) is not a directory.") }
+							throw_error(path, name, type, &block)
+							return false
+						end
+					when :exe
+						unless File.executable?(path)
+							block ||= proc { |given_path, given_name, given_type| PathCheckError.new("Path #{given_name.nil? ? '' : "'#{given_name}' "}(#{given_path}) is not executable.") }
+							throw_error(path, name, type, &block)
+							return false
+						end
+					else
+						raise "What is going on..."
+				end
+				true
 			end
 			
 			private
