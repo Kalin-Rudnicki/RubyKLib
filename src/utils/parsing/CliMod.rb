@@ -7,7 +7,7 @@ Dir.chdir(File.dirname(__FILE__)) do
 	require './../general/ArrayUtils'
 end
 
-$cli_log = KLib::Logging::Logger.new(:log_tolerance => :debug)
+$cli_log = KLib::Logger.new(:log_tolerance => :debug)
 # $cli_log.set_log_tolerance(:info, :rule => :args)
 
 module KLib
@@ -401,6 +401,7 @@ module KLib
 				def __normalizer
 					normalizer = HashNormalizer::NormalizerManager.new {}
 					Object.instance_method(:instance_variable_set).bind(normalizer).call(:@args, @parameters.values.map { |param| param.__arg })
+					normalizer.__send__(@method_info[:rest]).default_value([]).type_check(Array) unless @method_info[:rest].nil?
 					
 					normalizer
 				end
@@ -525,7 +526,7 @@ module KLib
 						values[param.long_name] = param.instance_variable_get(:@value)
 					end
 					if @method_info[:rest]
-						values[@method_info[:rest]] = rest
+						values[@method_info[:rest]] = rest.map { |r| r.value }
 					end
 					
 					@method_info[:method].call(values)
@@ -667,7 +668,7 @@ module KLib
 					:wont => :_wont
 				}
 				
-				attr_reader :long_name, :base_name, :comments, :type, :default, :value, :defined, :pre_validate, :post_validate, :transform
+				attr_reader :long_name, :base_name, :comments, :type, :default, :value, :defined, :pre_validate, :transform
 				
 				def initialize(param_name, type, &block)
 					ArgumentChecking.type_check(param_name, 'param_name', Symbol)
@@ -700,6 +701,27 @@ module KLib
 					
 					@comments = []
 					
+					if type == :boolean
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Boolean) {} }
+					elsif type == :hash
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Hash) {} }
+					elsif type == :array
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Array) {} }
+					elsif type == :int
+						pre_validate(proc { |me| "'#{me}' does not match Integer format" }) { |me| /^-?\d+$/.match?(me) }
+						pre_transform { |me| me.to_i }
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Integer) {} }
+					elsif type == :float
+						pre_validate(proc { |me| "'#{me}' does not match Integer format" }) { |me| /^-?\d+(\.\d+)?$/.match?(me) }
+						pre_transform { |me| me.to_i }
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Float) {} }
+					elsif type == :string
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, String) {} }
+					elsif type == :symbol
+						pre_transform { |me| me.to_sym }
+						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Symbol) {} }
+					end
+					
 					block.call(self) unless block.nil?
 				end
 				
@@ -713,10 +735,10 @@ module KLib
 					self
 				end
 				
-				def pre_transform(on_fail, &block)
+				def pre_transform(on_fail = nil, &block)
 					raise ArgumentError.new("You must supply a block for transformation") unless block_given?
 					ArgumentChecking.type_check(on_fail, 'on_fail', NilClass, String, Proc)
-					@transform = {
+					@pre_transform = {
 						:converter => block,
 						:on_fail => on_fail
 					}
