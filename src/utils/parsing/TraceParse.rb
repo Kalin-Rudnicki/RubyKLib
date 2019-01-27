@@ -27,8 +27,9 @@ module KLib
 			"Trace { method: [#{@method}], line_num: [#{@line_num}], file: [#{@file}] }"
 		end
 		
-		def self.call_trace
-			caller[1..-1].map { |c| Trace.new(c) }
+		def self.call_trace(remove_first = true)
+			ArgumentChecking.boolean_check(remove_first, 'remove_first')
+			(remove_first ? caller[1..-1] : caller).map { |c| Trace.new(c) }
 		end
 		
 	end
