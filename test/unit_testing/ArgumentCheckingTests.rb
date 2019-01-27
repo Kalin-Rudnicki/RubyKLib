@@ -49,10 +49,3 @@ end
 ArgumentCheckingTest.new("Kalin").set do |methods|
 	methods.test_type(true, Integer, String)
 end
-
-arg = {:a => 0, :b => 1, 'c' => 2}
-
-KLib::ArgumentChecking.check do |check|
-	check.arg.type_check(Hash)
-	check.arg(:keys).type_check_each(Symbol)
-end

@@ -22,7 +22,7 @@ module KLib
 			end
 			
 			def run(logger, inspect_instances)
-				ArgumentChecking.type_check(logger, 'logger', Logging::Logger)
+				ArgumentChecking.type_check(logger, 'logger', Logger)
 				ArgumentChecking.type_check(inspect_instances, 'inspect_instances', Boolean)
 				
 				FileUtils.mkdir_p(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/')))
@@ -180,8 +180,8 @@ module KLib
 			TESTS_ERRORED =  12
 			
 			method_spec(:main) do |spec|
-				spec.symbol(:log_level).default_value(:important).data(:post => proc { |val| KLib::Logging::DEFAULT_LOG_LEVEL_MANAGER.valid_levels.include?(val) })
-				spec.boolean(:inspect_instances).data(:mode => :_dont).default_value(false)
+				spec.symbol(:log_level).default_value(:important)
+				spec.boolean(:inspect_instances).boolean_data(:mode => :_dont).default_value(false)
 			end
 			
 			def self.main(log_level, inspect_instances, *args)
@@ -189,8 +189,10 @@ module KLib
 				FileUtils.mkdir_p(BASE_DIR)
 				#FileUtils.mkdir_p(File.join(BASE_DIR, 'logs'))
 				
-				logger = KLib::Logging::Logger.new(:log_tolerance => log_level)
+				logger = KLib::Logger.new(:log_tolerance => log_level)
 				logger.add_source(File.new(File.join(BASE_DIR, 'log.log'), 'w'), :target => :out, :range => :always)
+				
+				puts(Dir.pwd)
 				
 				logger.break
 				logger.log(:always, "Starting TestFramework")
