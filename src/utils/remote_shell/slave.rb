@@ -1,6 +1,7 @@
 
 require 'socket'
 require 'io/console'
+require 'digest'
 
 Dir.chdir(File.dirname(__FILE__)) do
 	require './codes'
@@ -54,7 +55,7 @@ module KLib
 							result = get_input(message, order[:message_mode], order[:multi], order[:hidden])
 						end
 						
-						result = result.hash.to_s if order[:encrypt]
+						result = Digest::SHA2.hexdigest(result) if order[:encrypt]
 						
 						send_string(result)
 					else
@@ -72,12 +73,14 @@ module KLib
 					if multi
 						lines = []
 						begin
-							if hidden
-								line = $stdin.noecho(&:gets).chomp
-								$stdout.puts
-								lines << line
-							else
-								lines << $stdin.gets.chomp
+							loop do
+								if hidden
+									line = $stdin.noecho(&:gets).chomp
+									$stdout.puts
+									lines << line
+								else
+									lines << $stdin.gets.chomp
+								end
 							end
 						rescue Interrupt
 							lines.join("\n")

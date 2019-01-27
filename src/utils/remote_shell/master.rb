@@ -76,7 +76,7 @@ module KLib
 				def read_string
 					lines = []
 					@client.gets.chomp.to_i.times { lines << @client.gets.chomp }
-					lines
+					lines.join("\n")
 				end
 		
 		end
