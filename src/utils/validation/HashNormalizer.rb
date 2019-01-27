@@ -100,33 +100,33 @@ module KLib
 				
 				# Do argument checking and validation
 				found_args.each_pair do |arg, from_key|
-					RaiseNotMe.ignore_me do
+					::KLib::RaiseNotMe.ignore_me do
 						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, source[from_key], @settings[:name_proc].call(from_key), *value)
+							::KLib::ArgumentChecking.send(method, source[from_key], @settings[:name_proc].call(from_key), *value)
 						end
 					end
 					unless arg.validate.nil? || arg.validate[:validator].call(source[from_key])
-						raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
+						::KLib::RaiseNotMe.raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(::Proc) ? arg.validate[:on_fail].call(source[from_key]) : arg.validate[:on_fail])
 					end
 				end
 				non_found_partition[:default_value].each do |arg|
-					RaiseNotMe.ignore_me do
+					::KLib::RaiseNotMe.ignore_me do
 						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
+							::KLib::ArgumentChecking.send(method, arg.missing[:value], "missing { :mode=>:default_value, :value=>#{arg.destination.inspect} }", *value)
 						end
 					end
 					unless arg.validate.nil? || arg.validate[:validator].call(arg.missing[:value])
-						raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
+						::KLib::RaiseNotMe.raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(::Proc) ? arg.validate[:on_fail].call(arg.missing[:value]) : arg.validate[:on_fail])
 					end
 				end
 				non_found_partition[:default_from_key].each do |arg|
-					RaiseNotMe.ignore_me do
+					::KLib::RaiseNotMe.ignore_me do
 						arg.checks.__checks.each_pair do |method, value|
-							ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
+							::KLib::ArgumentChecking.send(method, valid_default_keys[from_to[arg.missing[:value]]], "missing { :mode=>:default_from_key, :value=>#{arg.missing[:value].inspect} }", *value)
 						end
 					end
 					unless arg.validate.nil? || arg.validate[:validator].call(valid_default_keys[from_to[arg.missing[:value]]])
-						raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
+						::KLib::RaiseNotMe.raise_not_me NormalizerError.new(arg.validate[:on_fail].is_a?(::Proc) ? arg.validate[:on_fail].call(valid_default_keys[from_to[arg.missing[:value]]]) : arg.validate[:on_fail])
 					end
 				end
 				
