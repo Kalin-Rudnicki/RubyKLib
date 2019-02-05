@@ -964,6 +964,9 @@ module KLib
 					@type = :arg
 					@value = string[1..-1]
 					@escaped = true
+				elsif /^-\d/.match?(string) || /\s/.match?(string)
+					@type = :arg
+					@value = string
 				elsif string.start_with?('--')
 					raise InvalidParameterNameError.new(string) unless CliMod::Regexes::LONG_REGEX.match?(string)
 					@type = :long
