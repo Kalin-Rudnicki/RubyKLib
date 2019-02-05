@@ -579,7 +579,7 @@ module KLib
 								mode = :_no
 								flip = false
 							end
-							param.boolean_data(:mode => mode, :flip => flip)
+							param.boolean_data(:mode => mode, :flip => flip, :force => false)
 						elsif param.type == :string
 							prc = nil
 							if %w{file}.any? { |inc| split.include?(inc) }
@@ -750,8 +750,15 @@ module KLib
 					hash_args = HashNormalizer.normalize(hash_args) do |norm|
 						norm.mode.no_default.enum_check(BOOLEAN_MAPPINGS.values)
 						norm.flip.no_default.boolean_check
+						norm.force.boolean_check.default_value(true)
 					end
-					@boolean_data.merge!(hash_args)
+					force = hash_args[:force]
+					hash_args = hash_args.select { |k, v| k != :force }
+					if force
+						@boolean_data.merge!(hash_args) { |key, old, new| new }
+					else
+						@boolean_data.merge!(hash_args) { |key, old, new| old }
+					end
 					self
 				end
 				
