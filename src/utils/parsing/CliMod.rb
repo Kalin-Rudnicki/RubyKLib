@@ -796,16 +796,16 @@ module KLib
 				
 				def __info(extra_info)
 					if @type == :boolean
-						split = @data[:mode].to_s.split('_')
+						split = @boolean_data[:mode].to_s.split('_')
 						if split[0].length == 0
 							param = [
-								@short.any? ? "-[#{@short[@data[:flip]]}]#{@short[!@data[:flip]]}".magenta : nil,
+								@short.any? ? "-[#{@short[@boolean_data[:flip]]}]#{@short[!@boolean_data[:flip]]}".magenta : nil,
 								"--[#{split[1]}-]#{@base_name.tr('_', '-')}".magenta,
 								nil
 							]
 						else
 							param = [
-								@short.any? ? "-{#{@short[@data[:flip]]}/#{@short[!@data[:flip]]}}".magenta : nil,
+								@short.any? ? "-{#{@short[@boolean_data[:flip]]}/#{@short[!@boolean_data[:flip]]}}".magenta : nil,
 								"--{#{split[1]}/#{split[0]}}#{@base_name.tr('_', '-')}".magenta,
 								nil
 							]
