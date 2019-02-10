@@ -531,7 +531,7 @@ module KLib
 						values[param.long_name] = param.instance_variable_get(:@value)
 					end
 					if @method_info[:rest]
-						values[@method_info[:rest]] = rest.map { |r| r.value }
+						values[@method_info[:rest]] = rest.map { |r| ParameterSpec.try_convert(r.value, false) }
 					end
 					
 					@method_info[:method].call(values)
