@@ -227,7 +227,12 @@ module KLib
 						normalizer = spec.send(:__normalizer)
 						self.define_method(name) do |hash_args = {}|
 							target = {}
-							normalizer.__normalize(target, hash_args)
+							begin
+								normalizer.__normalize(target, hash_args)
+							rescue => e
+								$cli_log.fatal(e.message)
+								exit(1)
+							end
 							
 							self.method(:"__original_#{name}").call(*spec.method_info[:names].map { |n| target[n.to_sym] }, *(spec.method_info[:rest].nil? ? [] : target[spec.method_info[:rest]]))
 						end
@@ -713,7 +718,7 @@ module KLib
 						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Integer) {} }
 					elsif type == :float
 						pre_validate(proc { |me| "'#{me}' does not match Integer format" }) { |me| /^-?\d+(\.\d+)?$/.match?(me) }
-						pre_transform { |me| me.to_i }
+						pre_transform { |me| me.to_f }
 						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, Float) {} }
 					elsif type == :string
 						validate(proc { |me| "No explicit conversion of parameter '#{@long_name}' [#{me.class.inspect}] to one of [#{type.to_s.to_snake}]" }) { |me| ArgumentChecking.type_check(me, @long_name, String) {} }
@@ -783,8 +788,10 @@ module KLib
 				
 				def self.try_convert(val, default_sym)
 					if /^-?\d+$/.match?(val)
+						puts("matched '#{val}' to Integer")
 						val.to_i
 					elsif /^-?\d+(\.\d+)?$/.match?(val)
+						puts("matched '#{val}' to Float")
 						val.to_f
 					elsif /^'.*'$/.match?(val)
 						val[1..-2].to_s
