@@ -386,6 +386,10 @@ module KLib
 				param(param_name, :hash, &block)
 			end
 			
+			# TODO: def rest(name, &block)
+			# try_convert
+			# allow intermixed
+			
 			class ParseError < RuntimeError
 			end
 			
@@ -788,10 +792,8 @@ module KLib
 				
 				def self.try_convert(val, default_sym)
 					if /^-?\d+$/.match?(val)
-						puts("matched '#{val}' to Integer")
 						val.to_i
 					elsif /^-?\d+(\.\d+)?$/.match?(val)
-						puts("matched '#{val}' to Float")
 						val.to_f
 					elsif /^'.*'$/.match?(val)
 						val[1..-2].to_s
