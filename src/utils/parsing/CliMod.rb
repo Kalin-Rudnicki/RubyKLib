@@ -784,7 +784,7 @@ module KLib
 				def self.try_convert(val, default_sym)
 					if /^-?\d+$/.match?(val)
 						val.to_i
-					elsif /^-?\d+(.\d+)?$/.match?(val)
+					elsif /^-?\d+(\.\d+)?$/.match?(val)
 						val.to_f
 					elsif /^'.*'$/.match?(val)
 						val[1..-2].to_s
