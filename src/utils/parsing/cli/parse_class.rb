@@ -8,25 +8,13 @@ module KLib
 		LOWER_REGEX = /^[a-z][a-z]*(_([a-z]+|[0-9]+))*$/
 		UPPER_REGEX = /^[A-Z][a-z]*([A-Z][a-z]*|[0-9]+)*$/
 		
-		class UnimplementedMethodError < StandardError
-			def initialize(method_name)
-				super("You need to implement method '#{method_name}'")
-			end
-		end
-		
 		class ParseClass
 			
 			# Called very simply as ChildClass.new(ARGV)
 			def initialize(argv)
 				parse(argv)
-				execute
+				execute # Dynamically defined by spec.action { }
 				nil
-			end
-			
-			# Meant to be overriden in child class
-			# Called after all instance variables have been set
-			def execute
-				raise UnimplementedMethodError.new(:execute)
 			end
 			
 			# Called in order to specify arguments
@@ -36,18 +24,18 @@ module KLib
 				nil
 			end
 			
+			# @help and @help_extra generated in self.spec
 			def help
-				
+				@help
 			end
-			
 			def help_extra
-				
+				@help_extra
 			end
 			
 			private
 			
 				def parse(argv)
-					
+					# TODO
 				end
 		
 		end

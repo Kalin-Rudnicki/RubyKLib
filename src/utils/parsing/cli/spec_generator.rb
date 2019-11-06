@@ -12,10 +12,15 @@ module KLib
 				raise ArgumentError.new("Block is required for spec creation") unless block
 				raise ArgumentError.new("No current usage for args") if args.any?
 				
+				@action = nil
 				@specs = []
 				block.call(self)
 				
 				nil
+			end
+			
+			def action(&block)
+				
 			end
 			
 			def sub_spec(name, *args, comment: nil, **hash_args, &block)
@@ -78,8 +83,8 @@ module KLib
 					ArgumentChecking.type_check(name, :name, Symbol)
 					ArgumentChecking.type_check(aliases, :aliases, Array)
 					ArgumentChecking.type_check_each(aliases, :aliases, Symbol)
-					raise ArgumentError.new("#{name.inspect} is not a valid name") unless SpecGenerator::REGEX.match?(name.to_s)
-					aliases.each { |a| raise ArgumentError.new("#{a.inspect} is not a valid alias") unless SpecGenerator::REGEX.match?(a.to_s) }
+					raise ArgumentError.new("#{name.inspect} is not a valid name") unless CLI::LOWER_REGEX.match?(name.to_s)
+					aliases.each { |a| raise ArgumentError.new("#{a.inspect} is not a valid alias") unless CLI::LOWER_REGEX.match?(a.to_s) }
 					
 					@name = name
 					@aliases = aliases
@@ -193,8 +198,8 @@ module KLib
 					ArgumentChecking.type_check(positive, :positive, Symbol, NilClass)
 					ArgumentChecking.type_check(negative, :negative, Symbol, NilClass)
 					raise ArgumentError.new("positive and negative can not be the same") if positive == negative
-					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || SpecGenerator::REGEX.match?(positive.to_s)
-					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || SpecGenerator::REGEX.match?(negative.to_s)
+					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || CLI::LOWER_REGEX.match?(positive.to_s)
+					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || CLI::LOWER_REGEX.match?(negative.to_s)
 					
 					@positive = positive
 					@negative = negative
@@ -223,8 +228,8 @@ module KLib
 					ArgumentChecking.type_check(positive, :positive, Symbol, NilClass)
 					ArgumentChecking.type_check(negative, :negative, Symbol, NilClass)
 					raise ArgumentError.new("positive and negative can not be the same") if positive == negative
-					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || SpecGenerator::REGEX.match?(positive.to_s)
-					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || SpecGenerator::REGEX.match?(negative.to_s)
+					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || CLI::LOWER_REGEX.match?(positive.to_s)
+					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || CLI::LOWER_REGEX.match?(negative.to_s)
 					
 					# TODO : flag default
 					@positive = positive
@@ -287,6 +292,31 @@ module KLib
 					
 					block.call(self) if block
 					nil
+				end
+				
+				def is_path
+					validate(proc { |val, name| "#{name} is not a valid path, given: #{val}" }) { |val| File.exist?(val) }
+					self
+				end
+				
+				def is_file
+					is_path
+					validate(proc { |val, name| "#{name} is not a file, given: #{val}" }) { |val| File.file?(val) }
+					self
+				end
+				
+				def is_dir
+					is_path
+					validate(proc { |val, name| "#{name} is not a directory, given: #{val}" }) { |val| File.directory?(val) }
+					self
+				end
+				
+				def has_parent_dir
+					validate(proc { |val, name| "#{name} does not have a valid parent directory: #{File.expand_path(File.join(val, '..'))}" }) do |val|
+						parent = File.expand_path(File.join(val, '..'))
+						File.exist?(parent) && File.directory?(parent)
+					end
+					self
 				end
 			
 			end

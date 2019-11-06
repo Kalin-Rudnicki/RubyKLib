@@ -75,39 +75,39 @@ module KLib
 			# =====| Numbers |=====
 			
 			def positive
-				# TODO
+				validate(proc { |val, name| "#{name} must be positive, given: #{val}" }) { |val| val > 0 }
 				self
 			end
 			
 			def non_negative
-				# TODO
+				validate(proc { |val, name| "#{name} must be non-negative, given: #{val}" }) { |val| val >= 0 }
 				self
 			end
 			
 			def greater_than(key)
 				ArgumentChecking.type_check(key, :key, Symbol)
-				# TODO
+				validate(proc { |val, name, hash| "#{name} must be greater than #{key} (#{hash[key]}), given: #{val}" }) { |val, hash| val > hash[key] }
 				self
 			end
 			alias :gt :greater_than
 			
 			def greater_than_equal_to(key)
 				ArgumentChecking.type_check(key, :key, Symbol)
-				# TODO
+				validate(proc { |val, name, hash| "#{name} must be greater than or equal to #{key} (#{hash[key]}), given: #{val}" }) { |val, hash| val >= hash[key] }
 				self
 			end
 			alias :gt_et :greater_than_equal_to
 			
 			def less_than(key)
 				ArgumentChecking.type_check(key, :key, Symbol)
-				# TODO
+				validate(proc { |val, name, hash| "#{name} must be less than #{key} (#{hash[key]}), given: #{val}" }) { |val, hash| val < hash[key] }
 				self
 			end
 			alias :lt :less_than
 			
 			def less_than_equal_to(key)
 				ArgumentChecking.type_check(key, :key, Symbol)
-				# TODO
+				validate(proc { |val, name, hash| "#{name} must be less than or equal to #{key} (#{hash[key]}), given: #{val}" }) { |val, hash| val <= hash[key] }
 				self
 			end
 			alias :lt_et :less_than_equal_to
@@ -115,7 +115,9 @@ module KLib
 			# =====| Misc |=====
 			
 			def one_of(*options)
-				# TODO
+				options = options[0] if options.length == 1 && options[0].is_a?(Array)
+				ArgumentChecking.type_check(options, :options, Array)
+				validate(proc { |val, name| "#{name} must be one of #{options.join(', ')}, given: #{val}" }) { |val| options.include?(val) }
 				self
 			end
 			
