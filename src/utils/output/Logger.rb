@@ -131,7 +131,8 @@ module KLib
 	
 	class LogLevelManager
 		
-		DEFAULT_LOG_LEVEL_MANAGER = LogLevelManager.new(:never, :debug, :detailed, :info, :print, :important, :warning, :error, :fatal, :always, :off)
+		DEFAULT_LOG_LEVELS = %i{never debug detailed info print important warning error fatal always off}
+		DEFAULT_LOG_LEVEL_MANAGER = LogLevelManager.new(*DEFAULT_LOG_LEVELS)
 		
 		DEFAULT_LOG_LEVEL_MANAGER.alias_levels(
 			:never => :NEVER,
