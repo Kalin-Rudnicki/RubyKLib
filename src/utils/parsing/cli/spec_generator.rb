@@ -10,7 +10,7 @@ module KLib
 			
 			def initialize(*args, **hash_args, &block)
 				raise ArgumentError.new("Block is required for spec creation") unless block
-				raise ArgumentError.new("No current usage for args or hash_args") if args.any? || hash_args.any?
+				raise ArgumentError.new("No current usage for args") if args.any?
 				
 				@specs = []
 				block.call(self)
@@ -18,8 +18,17 @@ module KLib
 				nil
 			end
 			
-			def sub_spec(name, *args, **hash_args, &block)
+			def sub_spec(name, *args, comment: nil, **hash_args, &block)
+				ArgumentChecking.type_check(name, :name, String)
+				ArgumentChecking.type_check(comment, :comment, String, NilClass, Array)
+				ArgumentChecking.type_check_each(comment, :comment, String) if comment.is_a?(Array)
+				
+				comment = Array(comment)
 				sub_spec = SpecGenerator.new(*args, **hash_args, &block)
+				
+				# TODO
+				
+				nil
 			end
 			
 			def integer(*args, **hash_args, &block)
@@ -27,6 +36,7 @@ module KLib
 				@specs << spec
 				spec
 			end
+			alias :int :integer
 			
 			def float(*args, **hash_args, &block)
 				spec = FloatSpec.new(*args, **hash_args)
@@ -112,6 +122,7 @@ module KLib
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
 			positive non_negative
+			greater_than gt greater_than_equal_to gt_et less_than lt less_than_equal_to lt_et
 			one_of
 					})
 				
@@ -144,6 +155,7 @@ module KLib
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
 			positive non_negative
+			greater_than gt greater_than_equal_to gt_et less_than lt less_than_equal_to lt_et
 					})
 				
 				def initialize(name, aliases: [], multi: :error, split: false, &block)
