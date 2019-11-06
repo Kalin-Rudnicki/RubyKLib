@@ -54,7 +54,7 @@ module KLib
 			end
 			
 			def enum_check(obj, name, *valid_enums, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_enums' must have a length > 0.") unless valid_enums.length > 0
 				valid_enums = valid_enums[0] if valid_enums.length == 1 && valid_enums[0].is_a?(Enumerable)
 				return true if valid_enums.include?(obj)
