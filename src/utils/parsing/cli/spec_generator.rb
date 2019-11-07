@@ -11,28 +11,36 @@ module KLib
 			def initialize(*args, **hash_args, &block)
 				raise ArgumentError.new("Block is required for spec creation") unless block
 				raise ArgumentError.new("No current usage for args") if args.any?
+				hash_args = HashNormalizer.normalize(hash_args) do |norm| # TODO
+					norm.require_default.default_value(false).boolean_check
+					norm.extra_argv.default_value(false).boolean_check # Collect into @argv = []
+					norm.illegal_keys.default_value(:error).enum_check(:error, :arg) # ['--illegal-key'] => error: (error, illegal key), arg: (pretends it doesnt look like a key)
+				end
 				
-				@action = nil
+				@execute = nil
 				@specs = []
+				@sub_specs = []
 				block.call(self)
 				
 				nil
 			end
 			
-			def action(&block)
-				
+			def execute(&block)
+				raise ArgumentError.new("You must supply a block to this method") unless block
+				@execute = block
+				nil
 			end
 			
-			def sub_spec(name, *args, comment: nil, **hash_args, &block)
-				ArgumentChecking.type_check(name, :name, String)
-				ArgumentChecking.type_check(comment, :comment, String, NilClass, Array)
-				ArgumentChecking.type_check_each(comment, :comment, String) if comment.is_a?(Array)
-				
+			def sub_spec(name, *args, comment: [], **hash_args, &block)
 				comment = Array(comment)
+				
+				ArgumentChecking.type_check(name, :name, Symbol)
+				ArgumentChecking.type_check(comment, :comment, String, NilClass, Array)
+				ArgumentChecking.type_check_each(comment, :comment, String)
+				raise ArgumentError.new("#{name.inspect} is not a valid sub_spec") unless CLI::LOWER_REGEX.match?(name.to_s)
+				
 				sub_spec = SpecGenerator.new(*args, **hash_args, &block)
-				
-				# TODO
-				
+				@sub_specs << { name: name, spec: sub_spec, comment: comment }
 				nil
 			end
 			
@@ -73,11 +81,17 @@ module KLib
 				spec
 			end
 			
+			def __generate
+				raise "You can not have non-sub-specs without an execute" if @specs.any? && @execute.nil?
+				raise ""
+				# TODO
+			end
+			
 			# =====| SuperClass |=====
 			
-			REGEX = /^[a-z]+(_[a-z]+)*$/
-			
 			class Spec
+				
+				DEFAULT_SPLIT = /\s*,\s*/
 				
 				def initialize(name, aliases)
 					ArgumentChecking.type_check(name, :name, Symbol)
@@ -114,15 +128,6 @@ module KLib
 			
 			class IntegerSpec < Spec
 				
-				# required/optional/required_if/required_unless/default_value/default_from/default_proc
-				# range(min, max), positive, non_negative
-				# greater_than, less_than, greater_equal_to, less_equal_to; number/other param
-				# one_of
-				# validate
-				# comment
-				# alias 
-				# array
-				
 				stubs(%i{
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
@@ -134,8 +139,10 @@ module KLib
 				def initialize(name, aliases: [], multi: :error, split: false, &block)
 					super(name, aliases)
 					
-					ArgumentChecking.enum_check(multi, :multi, %i{error first last all})
-					ArgumentChecking.boolean_check(split, :split)
+					ArgumentChecking.enum_check(multi, :multi, %i{error error_different first last all flatten})
+					ArgumentChecking.type_check(split, :split, Boolean, String, Regexp)
+					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
+					split = DEFAULT_SPLIT if split == true
 					
 					validate(proc { |val| "#{val.inspect} does not look like an integer" }) { |val| /^-?\d+$/.match?(val) }
 					transform { |val| val.to_i }
@@ -148,14 +155,6 @@ module KLib
 			
 			class FloatSpec < Spec
 				
-				# required/optional/required_if/required_unless/default_value/default_from/default_proc
-				# range(min, max), positive, non_negative
-				# greater_than, less_than, greater_equal_to, less_equal_to; number/other param
-				# validate
-				# comment
-				# alias
-				# array
-				
 				stubs(%i{
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
@@ -166,8 +165,10 @@ module KLib
 				def initialize(name, aliases: [], multi: :error, split: false, &block)
 					super(name, aliases)
 					
-					ArgumentChecking.enum_check(multi, :multi, %i{error first last all})
-					ArgumentChecking.boolean_check(split, :split)
+					ArgumentChecking.enum_check(multi, :multi, %i{error error_different first last all flatten})
+					ArgumentChecking.type_check(split, :split, Boolean, String, Regexp)
+					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
+					split = DEFAULT_SPLIT if split == true
 					
 					validate(proc { |val| "#{val.inspect} does not look like a float" }) { |val| /^-?\d+(\.\d+)?$/.match?(val) }
 					transform { |val| val.to_f }
@@ -180,12 +181,6 @@ module KLib
 			
 			class BooleanSpec < Spec
 				
-				# required/optional/required_if/required_unless/default_value/default_from/default_proc
-				# validate
-				# yes_no
-				# comment
-				# alias
-				
 				stubs(%i{
 			required optional default_value default_from required_if required_if_present required_if_bool
 					})
@@ -193,7 +188,7 @@ module KLib
 				def initialize(name, aliases: [], multi: :error, positive: nil, negative: nil, &block)
 					super(name, aliases)
 					
-					ArgumentChecking.enum_check(multi, :multi, %i{error first last})
+					ArgumentChecking.enum_check(multi, :multi, %i{error error_different first last})
 					
 					ArgumentChecking.type_check(positive, :positive, Symbol, NilClass)
 					ArgumentChecking.type_check(negative, :negative, Symbol, NilClass)
@@ -212,14 +207,9 @@ module KLib
 			
 			class FlagSpec < Spec
 				
-				# yes_no_default; .yes_no_default(:do_dont, true) # aka: assume true, --dont-thing will be a flag
-				# validate
-				# comment
-				# alias
-				
 				stubs(%i{})
 				
-				def initialize(name, aliases: [], multi: :error, default: , positive: nil, negative: nil, &block)
+				def initialize(name, aliases: [], multi: :error, default: , positive: nil, negative: nil, &block) # TODO : default multi might make more sense as ignore?
 					super(name, aliases)
 					
 					ArgumentChecking.enum_check(multi, :multi, %i{error ignore})
@@ -231,7 +221,7 @@ module KLib
 					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || CLI::LOWER_REGEX.match?(positive.to_s)
 					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || CLI::LOWER_REGEX.match?(negative.to_s)
 					
-					# TODO : flag default
+					@default = default
 					@positive = positive
 					@negative = negative
 					
@@ -243,13 +233,6 @@ module KLib
 			
 			class SymbolSpec < Spec
 				
-				# required/optional/required_if/required_unless/default_value/default_from/default_proc
-				# one_of
-				# validate
-				# comment
-				# alias
-				# array
-				
 				stubs(%i{
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
@@ -259,8 +242,10 @@ module KLib
 				def initialize(name, aliases: [], multi: :error, split: false, &block)
 					super(name, aliases)
 					
-					ArgumentChecking.enum_check(multi, :multi, %i{error first last all})
-					ArgumentChecking.boolean_check(split, :split)
+					ArgumentChecking.enum_check(multi, :multi, %i{error error_different first last all flatten})
+					ArgumentChecking.type_check(split, :split, Boolean, String, Regexp)
+					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
+					split = DEFAULT_SPLIT if split == true
 					
 					transform { |val| val.to_sym }
 					
@@ -272,13 +257,6 @@ module KLib
 			
 			class StringSpec < Spec
 				
-				# required/optional/required_if/required_unless/default_value/default_from/default_proc
-				# one_of
-				# validate
-				# comment
-				# alias
-				# array
-				
 				stubs(%i{
 			auto_trim transform validate
 			required optional default_value default_from required_if required_if_present required_if_bool
@@ -287,8 +265,10 @@ module KLib
 				def initialize(name, aliases: [], multi: :error, split: false, &block)
 					super(name, aliases)
 					
-					ArgumentChecking.enum_check(multi, :multi, %i{error first last all})
-					ArgumentChecking.boolean_check(split, :split)
+					ArgumentChecking.enum_check(multi, :multi, %i{error error_different first last all flatten})
+					ArgumentChecking.type_check(split, :split, Boolean, String, Regexp)
+					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
+					split = DEFAULT_SPLIT if split == true
 					
 					block.call(self) if block
 					nil

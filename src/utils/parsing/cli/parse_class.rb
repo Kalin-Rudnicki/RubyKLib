@@ -20,7 +20,10 @@ module KLib
 			# Called in order to specify arguments
 			def self.spec(*args, **hash_args, &block)
 				spec_gen = SpecGenerator.new(*args, **hash_args, &block)
-				# TODO
+				# TODO : Save necessary data for the spec into instance variables of the Class
+				# Specs and their data
+				# SubSpecs
+				# Help messages
 				nil
 			end
 			
@@ -35,7 +38,18 @@ module KLib
 			private
 			
 				def parse(argv)
-					# TODO
+					# TODO : The whole thing
+					
+					nil
+				end
+			
+				def show_args
+					# TODO : Go based on saved stuff, not just instance variables
+					valid_vars = instance_variables - []
+					max_len = valid_vars.max { |a, b| a.length <=> b.length }
+					valid_vars.each do |var|
+						puts("#{var.ljust(max_len)}: #{instance_variable_get(var).inspect}")
+					end
 				end
 		
 		end
