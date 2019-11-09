@@ -11,10 +11,10 @@ class Test < KLib::CLI::ParseClass
 			show_args
 		end
 	end
-
+	
 end
 
-Test.new(%w{--a 4})
+Test.parse(%w{--a 4})
 
 class GenGraph < KLib::CLI::ParseClass
 	
@@ -30,7 +30,7 @@ class GenGraph < KLib::CLI::ParseClass
 
 end
 
-GenGraph.new(%w{--min 3 --max 5 --dont-require-connected})
+GenGraph.parse(%w{--min 3 --max 5 --dont-require-connected})
 
 class Sylce < KLib::CLI::ParseClass
 	
