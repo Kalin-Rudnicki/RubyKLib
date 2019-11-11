@@ -1,13 +1,11 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../version_compat/BasicObject'
-end
+require_relative '../version_compat/BasicObject'
 
 module KLib
 	
 	class DeadObject < BasicObject
 		
-		def method_missing(sym, *args)
+		def method_missing(sym, *args, **hash_args, &block)
 			self
 		end
 		
