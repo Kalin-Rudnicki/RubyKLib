@@ -25,12 +25,13 @@ module KLib
 			matches.length == 1 ? matches.first : nil
 		end
 		
-		def self.multi_match(string, options)
+		def self.multi_match(string, options, split: '_')
 			ArgumentChecking.type_check(string, 'string', String)
 			ArgumentChecking.type_check_each(options, 'options', String)
+			ArgumentChecking.type_check(split, :split, String, Regexp)
 			
-			string_split = string.split('_')
-			options_split = options.map { |opt| [opt, opt.split('_')] }.to_h
+			string_split = string.split(split)
+			options_split = options.map { |opt| [opt, opt.split(split)] }.to_h
 			
 			matches = []
 			options_split.each_pair do |orig, split|
