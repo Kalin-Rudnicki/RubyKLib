@@ -9,7 +9,7 @@ module Test
 		spec.int(:a)
 		
 		spec.execute do
-			show_args
+			show_params
 		end
 	end
 	
@@ -26,7 +26,7 @@ module GenGraph
 		spec.boolean(:require_connected, negative: :dont).comment("Whether or not to only include connected graphs")
 		
 		spec.execute do
-			show_args
+			show_params
 		end
 	end
 
@@ -59,7 +59,7 @@ module Sylce
 			end
 			
 			spec_2.execute do
-				show_args
+				show_params
 			end
 		end
 	end

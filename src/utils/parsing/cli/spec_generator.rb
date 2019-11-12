@@ -1,6 +1,7 @@
 
 require_relative 'parse_class'
 require_relative 'spec_stubs'
+require_relative '../../validation/HashNormalizer'
 require_relative '../../validation/ArgumentChecking'
 
 module KLib
@@ -17,6 +18,7 @@ module KLib
 					norm.require_default.default_value(false).boolean_check
 					norm.extra_argv.default_value(false).boolean_check # Collect into @argv = []
 					norm.illegal_keys.default_value(:error).enum_check(:error, :warn, :no_warn) # ['--illegal-key'] => error: (error, illegal key), arg: (pretends it doesnt look like a key)
+					norm.bad_keys.default_value(:error).enum_check(:error, :illegal)
 				end
 				
 				@mod = mod
@@ -26,6 +28,7 @@ module KLib
 				@require_default = hash_args[:require_default]
 				@extra_argv = hash_args[:extra_argv]
 				@illegal_keys = hash_args[:illegal_keys]
+				@bad_keys = hash_args[:bad_keys]
 				block.call(self)
 				
 				nil
@@ -90,7 +93,7 @@ module KLib
 			end
 			
 			def __data
-				[@mod, @execute, @specs, @sub_specs, @extra_argv, @illegal_keys]
+				[@mod, @execute, @specs, @sub_specs, @extra_argv, @illegal_keys, @bad_keys]
 			end
 			
 			def __generate
@@ -116,6 +119,7 @@ module KLib
 					@mappings = { @name => { to: @name, spec: self } }
 					@aliases.each { |a| @mappings[a] = { to: @name } }
 					
+					@auto_trim = false
 					@default = case deft_req
 									  when true
 										  { type: :required }
@@ -180,6 +184,9 @@ module KLib
 					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
 					split = DEFAULT_SPLIT if split == true
 					
+					@multi = multi
+					@split = split
+					
 					validate(proc { |val| "#{val.inspect} does not look like an integer" }) { |val| /^-?\d+$/.match?(val) }
 					transform { |val| val.to_i }
 					
@@ -208,6 +215,9 @@ module KLib
 					raise ArgumentError.new("short must be a single upper or lower case letter") unless short.nil? || /^[A-Za-z]$/.match?(short.to_s)
 					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
 					split = DEFAULT_SPLIT if split == true
+					
+					@multi = multi
+					@split = split
 					
 					validate(proc { |val| "#{val.inspect} does not look like a float" }) { |val| /^-?\d+(\.\d+)?$/.match?(val) }
 					transform { |val| val.to_f }
@@ -240,11 +250,13 @@ module KLib
 					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || CLI::LOWER_REGEX.match?(positive.to_s)
 					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || CLI::LOWER_REGEX.match?(negative.to_s)
 					
+					@multi = multi
+					
 					@positive = positive
 					@negative = negative
 					
 					@pos = @positive.nil? ? @name : :"#{@positive}_#{@name}"
-					@neg = @neg.nil? ? @name : :"#{@negative}_#{@name}"
+					@neg = @negative.nil? ? @name : :"#{@negative}_#{@name}"
 					
 					@short = {}
 					unless short.nil?
@@ -279,7 +291,7 @@ module KLib
 			validate
 						})
 				
-				def initialize(name, aliases: [], multi: :error, default: , positive: nil, negative: :no, short: nil, &block)
+				def initialize(name, aliases: [], multi: :error, default: false, positive: nil, negative: :no, short: nil, &block)
 					# TODO[LOW] : default multi might make more sense as ignore?
 					super(name, { type: :default_value, value: default }, aliases)
 					
@@ -293,6 +305,8 @@ module KLib
 					raise ArgumentError.new("positive and negative can not be the same") if positive == negative
 					raise ArgumentError.new("#{positive.inspect} is not a valid positive") unless positive.nil? || CLI::LOWER_REGEX.match?(positive.to_s)
 					raise ArgumentError.new("#{negative.inspect} is not a valid negative") unless negative.nil? || CLI::LOWER_REGEX.match?(negative.to_s)
+					
+					@multi = multi
 					
 					@default = default
 					@positive = positive
@@ -352,6 +366,9 @@ module KLib
 					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
 					split = DEFAULT_SPLIT if split == true
 					
+					@multi = multi
+					@split = split
+					
 					transform { |val| val.to_sym }
 					
 					@short = short.nil? ? {} : { short => @name }
@@ -378,6 +395,9 @@ module KLib
 					raise ArgumentError.new("short must be a single upper or lower case letter") unless short.nil? || /^[A-Za-z]$/.match?(short.to_s)
 					raise ArgumentError.new("{ multi: :flatten } only allowed when { split: true }") if split == false && multi == :flatten
 					split = DEFAULT_SPLIT if split == true
+					
+					@multi = multi
+					@split = split
 					
 					@short = short.nil? ? {} : { short => @name }
 					
