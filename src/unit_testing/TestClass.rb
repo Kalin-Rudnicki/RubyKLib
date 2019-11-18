@@ -67,7 +67,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::EqualAssertion.new(equal, message, expected, actual, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::EqualAssertion.new(equal, message, expected, actual, error, Trace.call_trace[0], @__current_args)
 					
 					equal
 				end
@@ -85,7 +85,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::NotEqualAssertion.new(unequal, message, expected, actual, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::NotEqualAssertion.new(unequal, message, expected, actual, error, Trace.call_trace[0], @__current_args)
 					
 					unequal
 				end
@@ -108,7 +108,7 @@ module KLib
 						raised = false
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::RaisedAssertion.new(raised, message, exception, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::RaisedAssertion.new(raised, message, exception, error, Trace.call_trace[0], @__current_args)
 					
 					raised
 				end
@@ -131,7 +131,7 @@ module KLib
 						raised = false
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::NotRaisedAssertion.new(!raised, message, exception, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::NotRaisedAssertion.new(!raised, message, exception, error, Trace.call_trace[0], @__current_args)
 					
 					!raised
 				end
@@ -147,7 +147,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::TrueAssertion.new(passed, message, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::TrueAssertion.new(passed, message, error, Trace.call_trace[0], @__current_args)
 					
 					passed
 				end
@@ -163,7 +163,7 @@ module KLib
 					else
 						error = nil
 					end
-					@__assertions[Trace.call_trace[0].method] << Assertions::FalseAssertion.new(passed, message, error, Trace.call_trace[0])
+					@__assertions[Trace.call_trace[0].method] << Assertions::FalseAssertion.new(passed, message, error, Trace.call_trace[0], @__current_args)
 					
 					passed
 				end
@@ -203,7 +203,8 @@ module KLib
 				
 				def enable(method_name, *args)
 					::KLib::ArgumentChecking.type_check(method_name, 'method_name', ::Symbol)
-					@methods[method_name] = args
+					@methods[method_name] ||= []
+					@methods[method_name] << args
 					self
 				end
 				

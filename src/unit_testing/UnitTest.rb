@@ -1,11 +1,10 @@
 
 require 'fileutils'
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './TestClass'
-	require './../utils/parsing/CliMod'
-	require './../utils/output/IoManipulation'
-end
+require_relative 'TestClass'
+require_relative '../utils/parsing/cli/parse_class'
+require_relative '../utils/output/IoManipulation'
+require_relative '../utils/output/Logger'
 
 module KLib
 	
@@ -49,47 +48,56 @@ module KLib
 					ran_methods = []
 					skipped_methods = []
 					
-					inst.__method_manager.__methods.each_pair do |method_name, args|
-						logger.log(:info, "method: '#{method_name}', args: #{args.inspect}")
-						logger.indent + 1
-						if legal_methods.include?(method_name)
-							if args.nil?
-								skipped_methods << method_name
-								logger.log(:detailed, "Skipping...")
-							else
-								ran_methods << method_name
-								logger.log(:detailed, "Running...")
-								out = nil
-								err = nil
-								begin
-									out, err, raised = IoManipulation.snatch_io(:preserve_raised => true) do
-										inst.send(method_name, *args)
-									end
-									raise raised unless raised.nil?
-								rescue Exception => e
-									logger.log(:error, e.inspect)
-								ensure
-									unless out.nil? || out.eof?
-										File.open(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/'), inst_num.to_s, "#{method_name}~out.log"), 'w') do |out_file|
-											until out.eof?
-												out_file.puts(out.readline)
+					inst.__method_manager.__methods.each_pair do |method_name, arg_list|
+						arg_list.each_with_index do |args, idx|
+							logger.log(:info, "method: '#{method_name}', args: #{args.inspect}")
+							inst.instance_variable_set(:@__current_args, args)
+							logger.indent + 1
+							if legal_methods.include?(method_name)
+								if args.nil?
+									skipped_methods << method_name
+									logger.log(:info, "Skipping...")
+								else
+									ran_methods << method_name
+									logger.log(:info, "Running...")
+									out = nil
+									err = nil
+									assertions = inst.__assertions
+									assertion_count = assertions.key?(method_name.to_s) ? assertions[method_name.to_s].length : 0
+									begin
+										out, err, raised = IoManipulation.snatch_io(preserve_raised: true) do
+											inst.send(method_name, *args)
+										end
+										non_passed = assertions[method_name.to_s][assertion_count..-1].select { |assertion| assertion.passed != true }
+										logger.log(:info, non_passed.length > 0 ? "failed (#{non_passed.length})" : "passed")
+										logger.indent + 1
+										non_passed.each { |fail| logger.log(:detailed, fail.inspect) }
+										logger.indent - 1
+										raise raised unless raised.nil?
+									rescue Exception => e
+										logger.log(:error, e.inspect)
+										logger.indent + 1
+										e.backtrace.reverse.each { |bt| logger.log(:debug, bt) }
+										logger.indent - 1
+									ensure
+										unless out.nil? || out.eof?
+											File.open(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/'), inst_num.to_s, "#{method_name}-#{idx}~out.log"), 'w') do |out_file|
+												out_file.puts(out.readline) until out.eof?
+											end
+										end
+										unless err.nil? || err.eof?
+											File.open(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/'), inst_num.to_s, "#{method_name}-#{idx}~err.log"), 'w') do |err_file| 
+												err_file.puts(err.readline) until err.eof?
 											end
 										end
 									end
-									unless err.nil? || err.eof?
-										File.open(File.join(BASE_DIR, @test_class.inspect.gsub('::', '/'), inst_num.to_s, "#{method_name}~err.log"), 'w') do |err_file|
-											until err.eof?
-												err_file.puts(err.readline)
-											end
-										end
-									end
-								end
 								
+								end
+							else
+								logger.log(:error, "'#{method_name}' is not a legal method for '#{@test_class}'")
 							end
-						else
-							logger.log(:error, "'#{method_name}' is not a legal method for '#{@test_class}'")
+							logger.indent - 1
 						end
-						logger.indent - 1
 					end
 					
 					
@@ -173,80 +181,81 @@ module KLib
 		end
 		
 		module FrameworkRunner
-			extend CliMod
 			
 			TESTS_PASSED =   10
 			TESTS_FAILED =   11
 			TESTS_ERRORED =  12
 			
-			method_spec(:main) do |spec|
-				spec.symbol(:log_level).default_value(:important)
-				spec.boolean(:inspect_instances).boolean_data(:mode => :_dont).default_value(false)
-			end
-			
-			def self.main(log_level, inspect_instances, *args)
-				FileUtils.rm_rf(BASE_DIR)
-				FileUtils.mkdir_p(BASE_DIR)
-				#FileUtils.mkdir_p(File.join(BASE_DIR, 'logs'))
+			cli_spec(extra_argv: true) do |spec|
+				spec.symbol(:log_level).default_value(:important).one_of(LogLevelManager::DEFAULT_LOG_LEVELS)
+				spec.boolean(:inspect_instances, negative: :dont).default_value(false)
 				
-				logger = KLib::Logger.new(:log_tolerance => log_level)
-				logger.add_source(File.new(File.join(BASE_DIR, 'log.log'), 'w'), :target => :out, :range => :always)
-				
-				puts(Dir.pwd)
-				
-				logger.break
-				logger.log(:always, "Starting TestFramework")
-				
-				search_strs = args.map { |arg| arg.to_s.gsub(/[\\\/]/, '/') }
-				
-				logger.break(:type => :open)
-				logger.log(:debug, "Search Strings (#{search_strs.length}):")
-				logger.indent + 1
-				search_strs.each { |str| logger.log(:debug, str) }
-				logger.indent - 1
-				
-				found_files = search_strs.map { |str| Dir.glob(str) }.flatten.select { |f| f.end_with?('.rb') }.map { |f| File.expand_path(f) }
-				
-				logger.break
-				logger.log(:info, "Found (#{found_files.length}) ruby file#{found_files.length == 1 ? '' : 's'}:")
-				logger.indent + 1
-				found_files.each { |f| logger.log(:detailed, f) }
-				logger.indent - 1
-				
-				found_files.each { |f| require(f) }
-				
-				logger.break
-				logger.log(:info, "Found (#{TestClass.__inherited.length}) UnitTest Class#{TestClass.__inherited.length == 1 ? '' : 'es'}:")
-				logger.indent + 1
-				TestClass.__inherited.each { |klass| logger.log(:detailed, klass.inspect) }
-				logger.indent - 1
-				
-				reports = {}
-				
-				framework_classes = TestClass.__inherited.map { |klass| TestFramework.new(klass) }
-				framework_classes.each do |framework|
-					reports[framework.test_class] = framework.run(logger, inspect_instances)
+				spec.execute do
+					show_params
+					
+					FileUtils.rm_rf(BASE_DIR)
+					FileUtils.mkdir_p(BASE_DIR)
+					#FileUtils.mkdir_p(File.join(BASE_DIR, 'logs'))
+					
+					logger = KLib::Logger.new(:log_tolerance => @log_level)
+					logger.add_source(File.new(File.join(BASE_DIR, 'log.log'), 'w'), :target => :out, :range => :always)
+					
+					puts(Dir.pwd)
+					
+					logger.break
+					logger.log(:always, "Starting TestFramework")
+					
+					search_strs = @argv.map { |arg| arg.to_s.gsub(/[\\\/]/, '/') }
+					
+					logger.break(:type => :open)
+					logger.log(:debug, "Search Strings (#{search_strs.length}):")
+					logger.indent + 1
+					search_strs.each { |str| logger.log(:debug, str) }
+					logger.indent - 1
+					
+					found_files = search_strs.map { |str| Dir.glob(str.start_with?('@') ? str[1..-1] : str) }.flatten.select { |f| f.end_with?('.rb') }.map { |f| File.expand_path(f) }
+					
+					logger.break
+					logger.log(:info, "Found (#{found_files.length}) ruby file#{found_files.length == 1 ? '' : 's'}:")
+					logger.indent + 1
+					found_files.each { |f| logger.log(:detailed, f) }
+					logger.indent - 1
+					
+					found_files.each { |f| require(f) }
+					
+					logger.break
+					logger.log(:info, "Found (#{TestClass.__inherited.length}) UnitTest Class#{TestClass.__inherited.length == 1 ? '' : 'es'}:")
+					logger.indent + 1
+					TestClass.__inherited.each { |klass| logger.log(:detailed, klass.inspect) }
+					logger.indent - 1
+					
+					reports = {}
+					
+					framework_classes = TestClass.__inherited.map { |klass| TestFramework.new(klass) }
+					framework_classes.each do |framework|
+						reports[framework.test_class] = framework.run(logger, @inspect_instances)
+					end
+					
+					full_join = Assertions::AssertionReport.join(reports.values)
+					logger.break
+					logger.log(:print, "AssertionReports: #{full_join.inspect}")
+					logger.indent + 1
+					reports.each_pair { |test_class, report| logger.log(:print, "'#{test_class}' => #{report.inspect}") }
+					logger.indent - 1
+					
+					if full_join.errors > 0
+						result = :errored
+					elsif full_join.fails > 0
+						result = :failed
+					else
+						result = :passed
+					end
+					
+					logger.break(:type => :close)
+					logger.log(:always, "Complete... Result: #{result.to_s.upcase}")
+					
+					FrameworkRunner.const_get(:"TESTS_#{result.to_s.upcase}")
 				end
-				
-				full_join = Assertions::AssertionReport.join(reports.values)
-				logger.break
-				logger.log(:print, "AssertionReports: #{full_join.inspect}")
-				logger.indent + 1
-				reports.each_pair { |test_class, report| logger.log(:print, "'#{test_class}' => #{report.inspect}") }
-				logger.indent - 1
-				
-				if full_join.errors > 0
-					result = :errored
-				elsif full_join.fails > 0
-					result = :failed
-				else
-					result = :passed
-				end
-				
-				logger.break(:type => :close)
-				logger.log(:always, "Complete... Result: #{result.to_s.upcase}")
-				
-				self.const_get(:"TESTS_#{result.to_s.upcase}")
 			end
 			
 		end
@@ -257,6 +266,7 @@ end
 
 if File.expand_path($0) == File.expand_path(__FILE__)
 	result = KLib::UnitTest::FrameworkRunner.parse
-	exit(result)
+	# exit(result)
+	exit
 end
 
