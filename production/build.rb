@@ -83,6 +83,7 @@ module KLibBuild
 				
 				# Install
 				puts("=====| install |=====")
+				system("git add builds/klib-#{version}.gem")
 				if @install
 					system("gem install builds/klib-#{version}.gem")
 				else
