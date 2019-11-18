@@ -1,5 +1,6 @@
 
 require_relative '../../../src/utils/parsing/cli/parse_class'
+require_relative '../../../src/utils/formatting/ColorString'
 
 module Ex1
 	
@@ -33,13 +34,15 @@ def run(argv)
 	puts("> run ##{$run_count}")
 	begin
 		Ex1.parse(argv)
-		puts("completed successfully")
+		puts("completed successfully".green)
 	rescue SystemExit => e
-		$stderr.puts("[run ##{$run_count}] Caught exit(#{e.status})")
+		puts("[run ##{$run_count}] Caught exit(#{e.status})".red)
 	rescue StandardError => e
-		$stderr.puts("[run ##{$run_count}] Caught error: #{e.inspect}")
-		e.backtrace.each { |t| $stderr.puts(t) }
+		puts("[run ##{$run_count}] Caught error: #{e.inspect}".red)
+		e.backtrace.reverse.each { |t| puts(t.red) }
 	end
+	$stdout.flush
+	$stderr.flush
 end
 
 run(%w{s})
@@ -51,3 +54,6 @@ run(%w{s-a --alias=1})
 run(%w{s-a --alias 1})
 run(%w{s-a --str=0})
 run(%w{s-a --str-1=1 -s=1 --str-2 2 -S 2})
+run(%w{s-a --b=true --b=false})
+run(%w{s-a --f=true})
+run(%w{s-a --str-1})
