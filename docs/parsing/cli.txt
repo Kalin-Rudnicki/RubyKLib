@@ -1,0 +1,100 @@
+=====| Specs -> multi |=====
+mutli implies the arg was called more than once
+ex: --my-int 1 --my-int 1
+ex: --my-int 1 --my-int 2
+ex: --do-stuff --do-stuff
+ex: --do-stuff --dont-do-stuff
+
+( flag : [error ignore] )
+> error  : "you cant specify #{arg} more than once"
+> ignore : with flags, it is t/f by default, and specifying the arg makes it the other,
+so all you could be doing is saying the same thing multiple times, so ignore the fact it was specified multiple times
+< examples >
+-> ex-1: --do-thing --do-thing
+{ multi: :error }
+parsing error : specified multiple times
+{ multi: :ignore }
+@do_thing = true
+
+( boolean : [error error_different first last] )
+> error           : "you cant specify #{arg} more than once"
+> error_different : "you cant specify #{arg} more than once", but ignored if every value passed in is the same
+> first           : takes the first arg specified
+> last            : takes the last arg specified
+< examples >
+-> ex-1: --do-thing --do-thing
+{ multi: :error }
+parsing error : specified multiple times
+{ multi: :error_different }
+@do_thing = true
+{ multi: :first }
+@do_thing = true
+{ multi: :last }
+@do_thing = true
+-> ex-2: --do-thing --dont-do-thing
+{ multi: :error }
+parsing error : specified multiple times
+{ multi: :error_different }
+parsing error : specified multiple times
+{ multi: :first }
+@do_thing = true
+{ multi: :last }
+@do_thing = false
+
+( integer / float / symbol / string : [error error_different first last all flatten] )
+> error           : "you cant specify #{arg} more than once"
+> error_different : "you cant specify #{arg} more than once", but ignored if every value passed in is the same
+> first           : takes the first arg specified
+> last            : takes the last arg specified
+> all             : collects all args into an array, even if only 1 specified
+< examples combining multi/split >
+-> ex-1: --arg 1,2,3 --arg 1,2,3
+{ split: true, multi: :error }
+parsing error : specified multiple times
+{ split: true, multi: :error_different }
+@arg = ['1', '2', '3']
+{ split: true, multi: :first }
+@arg = ['1', '2', '3']
+{ split: true, multi: :last }
+@arg = ['1', '2', '3']
+{ split: true, multi: :all }
+@arg = [['1', '2', '3'], ['1', '2', '3']]
+{ split: true, multi: :flatten }
+@arg = ['1', '2', '3', '1', '2', '3']
+{ split: false, multi: :error }
+parsing error : specified multiple times
+{ split: false, multi: :error_different }
+@arg = '1,2,3'
+{ split: false, multi: :first }
+@arg = '1,2,3'
+{ split: false, multi: :last }
+@arg = '1,2,3'
+{ split: false, multi: :all }
+@arg = ['1,2,3', '1,2,3']
+{ split: false, multi: :flatten }
+building error : can only flatten when split
+-> ex-2: --arg 1,2,3 --arg 4,5,6
+{ split: true, multi: :error }
+parsing error : specified multiple times
+{ split: true, multi: :error_different }
+parsing error : specified multiple times
+{ split: true, multi: :first }
+@arg = ['1', '2', '3']
+{ split: true, multi: :last }
+@arg = ['4', '5', '6']
+{ split: true, multi: :all }
+@arg = [['1', '2', '3'], ['4', '5', '6']]
+{ split: true, multi: :flatten }
+@arg = ['1', '2', '3', '4', '5', '6']
+{ split: false, multi: :error }
+parsing error : specified multiple times
+{ split: false, multi: :error_different }
+parsing error : specified multiple times
+{ split: false, multi: :first }
+@arg = '1,2,3'
+{ split: false, multi: :last }
+@arg = '4,5,6'
+{ split: false, multi: :all }
+@arg = ['1,2,3', '4,5,6']
+{ split: false, multi: :flatten }
+building error : can only flatten when split

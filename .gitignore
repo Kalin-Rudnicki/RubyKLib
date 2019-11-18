@@ -1,3 +1,4 @@
 /.idea/
+!/klib-gem/builds
 /klib-gem/
 /KLib_UnitTest/

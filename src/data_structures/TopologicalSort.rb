@@ -8,20 +8,20 @@ module KLib
 
 	class TopologicalSort
 	
-		def initialize
+		def initialize(hash = {})
 			@elements = {}
 		end
 		
-		def self.sort(hash)
-			sorter = TopologicalSort.new
-			sorter[hash]
+		def self.sort(*args)
+			sorter = TopologicalSort.new(*args)
 			sorter.sort
 		end
 		
 		def []= (k, v)
+			v = Array(v)
 			ArgumentChecking.type_check(k, 'k', Symbol)
 			ArgumentChecking.type_check_each(v, 'v', Symbol)
-			@elements[k] ||= []
+			@elements[k] ||= Set.new
 			@elements[k] |= v
 			nil
 		end
@@ -32,7 +32,7 @@ module KLib
 		end
 		
 		def sort
-			all = (@elements.keys + @elements.values.flatten).uniq
+			all = (@elements.keys + @elements.values.map { |v| v.to_a }.flatten).uniq
 			needed = all.map { |key| [key, @elements.key?(key) ? Set.new(@elements[key]) : Set.new] }.to_h
 			options = Set.new(all)
 			used = Set.new
@@ -54,11 +54,11 @@ module KLib
 			order
 		end
 		
-		class CircularReferenceError < RuntimeError
+		class CircularReferenceError < StandardError
 			attr_reader :problems
 			def initialize(problems)
-				@problems = problems
 				super("Error sorting: #{problems.inspect}")
+				@problems = problems
 			end
 		end
 	

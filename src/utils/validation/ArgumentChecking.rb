@@ -31,7 +31,7 @@ module KLib
 			end
 			
 			def type_check(obj, name, *valid_types, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_types' must have a length > 0.") unless valid_types.length > 0
 				valid_types = valid_types[0] if valid_types.length == 1 && valid_types[0].is_a?(Enumerable)
 				valid_types = valid_types.map { |t| t == Boolean ? [TrueClass, FalseClass] : [t] }.flatten(1)
@@ -43,7 +43,7 @@ module KLib
 			end
 			
 			def type_check_each(obj, name, *valid_types, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_types' must have a length > 0.") unless valid_types.length > 0
 				valid_types = valid_types.map { |t| t == Boolean ? [TrueClass, FalseClass] : [t] }.flatten(1)
 				valid_types.each_with_index { |t, i| raise InvalidValidationError.new("Parameter 'valid_types[#{i}]'. No explicit conversion of [#{t.class.inspect}] to [Module].") unless t.is_a?(Module) }
@@ -54,7 +54,7 @@ module KLib
 			end
 			
 			def enum_check(obj, name, *valid_enums, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_enums' must have a length > 0.") unless valid_enums.length > 0
 				valid_enums = valid_enums[0] if valid_enums.length == 1 && valid_enums[0].is_a?(Enumerable)
 				return true if valid_enums.include?(obj)
@@ -64,7 +64,7 @@ module KLib
 			end
 			
 			def enum_check_each(obj, name, *valid_enums, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_enums' must have a length > 0.") unless valid_enums.length > 0
 				type_check(obj, name, Enumerable)
 				pass = true
@@ -73,7 +73,7 @@ module KLib
 			end
 			
 			def respond_to_check(obj, name, *methods, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'methods' must have a length > 0.") unless methods.length > 0
 				methods = methods[0] if methods.length == 1 && methods[0].is_a?(Enumerable)
 				missing = methods.select { |m| !obj.respond_to?(m) }
@@ -84,7 +84,7 @@ module KLib
 			end
 			
 			def nil_check(obj, name, &block)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				return true unless obj.nil?
 				block ||= proc { |obj_name| NilCheckError.new("Parameter #{obj_name.nil? ? '' : "'#{obj_name}' "}can not be nil.") }
 				throw_error(name, &block)
@@ -98,7 +98,7 @@ module KLib
 			def path_check(path, name, type = :any, &block)
 				valid_types = %i{any file dir exe}
 				raise InvalidValidationError.new("Parameter 'path'. No explicit conversion of [#{path.class.inspect}] to [String].") unless path.is_a?(String)
-				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [String, NilClass].") unless name.is_a?(String) || name.nil?
+				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'type'. Value [#{type.inspect}] does not exist in #{valid_types.inspect}.") unless valid_types.include?(type)
 				
 				unless File.exists?(path)
