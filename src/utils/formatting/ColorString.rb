@@ -101,6 +101,8 @@ class String
 	end
 	
 	def de_color
+		# KLib::Trace.call_trace.each { |tr| puts(tr.inspect) }
+		# exit
 		self.gsub(/\e\[(\d+)(;\d+)*m/, '')
 	end
 

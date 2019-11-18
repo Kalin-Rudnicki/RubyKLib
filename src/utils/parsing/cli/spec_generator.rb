@@ -320,12 +320,12 @@ module KLib
 					
 					@multi = multi
 					
-					@default = default
+					@dft = default
 					@positive = positive
 					@negative = negative
 					
 					@pos = @positive.nil? ? @name : :"#{@positive}_#{@name}"
-					@neg = @neg.nil? ? @name : :"#{@negative}_#{@name}"
+					@neg = @negative.nil? ? @name : :"#{@negative}_#{@name}"
 					
 					@short = {}
 					unless short.nil?
@@ -338,19 +338,19 @@ module KLib
 					end
 					
 					@mappings = {}
-					if @default
-						@mappings[@pos] = { to: @pos, val: true, spec: self }
-						if @positive.nil?
-							@aliases.each { |a| @mappings[a] = { to: @pos } }
-						else
-							@aliases.each { |a| @mappings[:"#{@positive}_#{a}"] = { to: @pos } }
-						end
-					else
+					if @dft
 						@mappings[@neg] = { to: @neg, val: false, spec: self }
 						if @negative.nil?
 							@aliases.each { |a| @mappings[a] = { to: @neg } }
 						else
 							@aliases.each { |a| @mappings[:"#{@negative}_#{a}"] = { to: @neg } }
+						end
+					else
+						@mappings[@pos] = { to: @pos, val: true, spec: self }
+						if @positive.nil?
+							@aliases.each { |a| @mappings[a] = { to: @pos } }
+						else
+							@aliases.each { |a| @mappings[:"#{@positive}_#{a}"] = { to: @pos } }
 						end
 					end
 					
