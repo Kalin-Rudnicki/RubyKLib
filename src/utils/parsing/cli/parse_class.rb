@@ -1,8 +1,9 @@
 
 require_relative 'spec_generator'
 require_relative 'spec_stubs'
-require_relative '../../validation/ArgumentChecking'
 require_relative '../GnuMatch'
+require_relative '../../validation/ArgumentChecking'
+require_relative '../../../data_structures/TopologicalSort'
 
 module KLib
 	
@@ -111,11 +112,24 @@ module KLib
 				@help = 'help'
 				@help_extra = 'help_extra'
 				
+				# priority
+				
+				sorter = TopologicalSort.new
+				@params_by_name.each_value do |param|
+					name, dft, priority, vt = %i{name default priority validate_transform}.map { |var| param.instance_variable_get(:"@#{var}") }
+					sorter[name] = priority
+					sorter[name] = dft[:priority] if dft.key?(:priority)
+					vt.each do |_vt|
+						sorter[name] = _vt.priority if _vt.priority.any?
+					end
+				end
+				
+				@order = sorter.sort
+				
 				nil
 			end
 			
 			def parse(argv)
-				puts("parse: #{argv.inspect}")
 				current = nil
 				new_argv = []
 				parsed = @params_by_name.values.map { |v| [v, []] }.to_h
@@ -125,7 +139,6 @@ module KLib
 						match = GnuMatch.multi_match(argv[0], @all_subs, split: SPLIT)
 						if match
 							match = @sub_spec_aliases[match.to_sym]
-							puts("match: #{match.inspect}")
 							return @mod.const_get(match.to_s.to_camel(false).to_sym).parse(argv[1..-1])
 						elsif @extra_argv
 						elsif $gnu_matches.any?
@@ -139,6 +152,7 @@ module KLib
 					if current
 						current[:arg] = arg
 						parsed[current[:spec]] << current
+						current.delete(:spec)
 						current = nil
 					else
 						if (match = PARAM_W_ARG.match(arg))
@@ -161,7 +175,7 @@ module KLib
 									$stderr.puts("You can not specify flags in the form of --param=val")
 									exit(1)
 								end
-								parsed[spec] << { spec: spec, param: LONG_PROC.(param) + '=', arg: val }
+								parsed[spec] << { param: LONG_PROC.(param) + '=', arg: val }
 							end
 						elsif (match = SHORT_PARAM_W_ARG.match(arg))
 							param = match[1]
@@ -174,14 +188,14 @@ module KLib
 									$stderr.puts("You can not specify booleans or flags in the form of -p=val")
 									exit(1)
 								end
-								parsed[spec] << { spec: spec, param: SHORT_PROC.(param) + '=', arg: val }
+								parsed[spec] << { param: SHORT_PROC.(param) + '=', arg: val }
 							end
 						elsif (match = PARAM.match(arg))
 							param = match[1]
 							if (match = search(arg, param, @all_long, new_argv, &LONG_PROC))
 								spec = @params[@long_mappings[match]]
 								if @values.key?(@long_mappings[match])
-									parsed[spec] << { spec: spec, param: LONG_PROC.(param), arg: @values[@long_mappings[match]] }
+									parsed[spec] << { param: LONG_PROC.(param), arg: @values[@long_mappings[match]] }
 								else
 									current = { spec: spec, param: LONG_PROC.(param) }
 								end
@@ -191,7 +205,7 @@ module KLib
 							if (match = search(arg, param, @all_short, new_argv, &SHORT_PROC))
 								spec = @params[@long_mappings[@short_mappings[match]]]
 								if @values.key?(@long_mappings[@short_mappings[match]])
-									parsed[spec] << { spec: spec, param: SHORT_PROC.(param), arg: @values[@long_mappings[@short_mappings[match]]] }
+									parsed[spec] << { param: SHORT_PROC.(param), arg: @values[@long_mappings[@short_mappings[match]]] }
 								else
 									current = { spec: spec, param: SHORT_PROC.(param) }
 								end
@@ -232,18 +246,222 @@ module KLib
 								new_argv << arg
 							else
 								$stderr.puts("No ARGV for arg '#{arg}'")
+								exit(1)
 							end
 						end
 					end
 				end
+				if current
+					$stderr.puts("Failed to specify argument for '#{current[:param]}'")
+					exit(1)
+				end
 				
+				results = @extra_argv ? { argv: new_argv } : {}
+				@order.each do |var|
+					param = @params_by_name[var]
+					spec = @params_by_name[var]
+					vals = parsed[spec]
+					val = nil
+					if vals.any?
+						if vals.length > 1
+							%i{
+							error error_different first last all flatten
+							error error_different first last
+							error ignore
+							}
+							case param.multi
+								when :error
+									$stderr.puts("Param '#{param.name}' specified multiple times: #{vals.map { |v| v[:param] }.join(', ')}")
+									exit(1)
+								when :error_different
+									if vals.map { |v| v[:arg] }.uniq.length > 1
+										$stderr.puts("Param '#{param.name}' specified multiple times with different values: #{vals.map { |v| v[:param] }.join(', ')}")
+										exit(1)
+									else
+										val = vals.first[:arg]
+									end
+								when :first, :ignore
+									val = vals.first[:arg]
+								when :last
+									val = vals.last[:arg]
+								when :all
+									val = vals.map { |v| v[:arg] }
+								when :flatten
+									val = vals.map { |v| v[:arg] }
+								else
+									raise "What is going on?"
+							end
+						else
+							case param.multi
+								when :error, :error_different, :first, :last, :ignore
+									val = vals.first[:arg]
+								when :all, :flatten
+									val = vals.map { |v| v[:arg] }
+								else
+									raise "What is going on?"
+							end
+						end
+						if param.split
+							case param.multi
+								when :error, :error_different, :first, :last, :ignore
+									val = val.split(param.split)
+									param.validate_transform.each do |vt|
+										case vt
+											when Validate
+												begin
+													val.each { |v| vt.validate(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											when Transform
+												begin
+													val = val.map { |v| vt.transform(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											else
+												raise "What is going on?"
+										end
+									end
+								when :all
+									val = val.map { |v| v.split(param.split) }
+									param.validate_transform.each do |vt|
+										case vt
+											when Validate
+												begin
+													val.each { |v1| v1.each { |v2| vt.validate(v2, param.name, results) } }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											when Transform
+												begin
+													val = val.map { |v1| v1.map { |v2| vt.transform(v2,  param.name, results) } }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											else
+												raise "What is going on?"
+										end
+									end
+								when :flatten
+									val = val.map { |v| v.split(param.split) }.flatten
+									param.validate_transform.each do |vt|
+										case vt
+											when Validate
+												begin
+													val.each { |v| vt.validate(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											when Transform
+												begin
+													val = val.map { |v| vt.transform(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											else
+												raise "What is going on?"
+										end
+									end
+								else
+									raise "What is going on?"
+							end
+						else
+							case param.multi
+								when :error, :error_different, :first, :last, :ignore
+									param.validate_transform.each do |vt|
+										case vt
+											when Validate
+												begin
+													vt.validate(val,  param.name, results)
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											when Transform
+												begin
+													val = vt.transform(val,  param.name, results)
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											else
+												raise "What is going on?"
+										end
+									end
+								when :all
+									param.validate_transform.each do |vt|
+										case vt
+											when Validate
+												begin
+													val.each { |v| vt.validate(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											when Transform
+												begin
+													val = val.map { |v| vt.transform(v,  param.name, results) }
+												rescue CliParseError => e
+													$stderr.puts(e.message)
+													exit(1)
+												end
+											else
+												raise "What is going on?"
+										end
+									end
+								when :flatten
+									raise "What is going on?"
+								else
+									raise "What is going on?"
+							end
+						end
+						
+						results[param.name] = val
+					else
+						case param.default[:type]
+							when :required
+								$stderr.puts("Missing required arg '#{param.name}'")
+								exit(1)
+							when :required_if
+								begin
+									if param.default[:if].(results)
+										$stderr.puts("Missing conditionally required arg '#{param.name}'")
+										exit(1)
+									end
+								rescue => e
+									$stderr.puts("UNCAUGHT ERROR with '#{param.name}'")
+									exit(1)
+								end
+							when :optional
+							when :default_value
+								# TODO : adapt to multi/split
+								results[param.name] = param.default[:value]
+							when :default_from
+								results[param.name] = results[param.default[:from]]
+							when :default_proc
+								results[param.name] = param.default[:proc].(results)
+							else
+								raise "What is going on?"
+						end
+					end
+				end
+				
+				@instance.new(results)
 			end
 			
 			def show_params(instance)
 				raise ArgumentError.new("Must be given an instance of #{@instance}") unless instance.is_a?(@instance)
 				
 				puts("=====| params |=====")
-				len = @params_by_name.keys.map { |k| k.to_s.length }.max + 1
+				len = (@params_by_name.keys + (@extra_argv ? [:argv] : [])).map { |k| k.to_s.length }.max + 1
+				puts("#{'@argv'.ljust(len)} = #{instance.instance_variable_get(:@argv).inspect}") if @extra_argv
 				@params_by_name.each_key do |param|
 					var = :"@#{param}"
 					if instance.instance_variable_defined?(var)
@@ -312,7 +530,7 @@ module KLib
 				nil
 			end
 			
-			def parse(argv)
+			def parse(argv = ARGV)
 				ArgumentChecking.type_check(argv, :argv, Array)
 				ArgumentChecking.type_check_each(argv, :argv, String) 
 				

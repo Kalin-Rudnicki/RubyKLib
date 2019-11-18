@@ -105,6 +105,9 @@ module KLib
 			class Spec
 				
 				DEFAULT_SPLIT = /\s*,\s*/
+				attr_reader :name, :aliases, :default
+				attr_reader :multi, :split
+				attr_reader :validate_transform
 				
 				def initialize(name, deft_req, aliases)
 					ArgumentChecking.type_check(name, :name, Symbol)
@@ -169,7 +172,7 @@ module KLib
 				
 				stubs(%i{
 			auto_trim transform validate
-			required optional default_value default_from required_if required_if_present required_if_absent required_if_bool
+			required optional default_value default_from default_proc required_if required_if_present required_if_absent required_if_bool
 			positive non_negative greater_than gt greater_than_equal_to gt_et less_than lt less_than_equal_to lt_et
 			one_of
 					})
@@ -187,8 +190,17 @@ module KLib
 					@multi = multi
 					@split = split
 					
-					validate(proc { |val| "#{val.inspect} does not look like an integer" }) { |val| /^-?\d+$/.match?(val) }
-					transform { |val| val.to_i }
+					validate(proc { |val| "#{val.inspect} does not look like an integer" }) { |val| /^-?(0x)?\d+$/.match?(val) }
+					transform do |val|
+						case val
+							when /^-?0x\d+$/
+								val.to_i(16)
+							when /^-?\d+$/
+								val.to_i(10)
+							else
+								raise "What is going on?"
+						end
+					end
 					
 					@short = short.nil? ? {} : { short => @name }
 					
@@ -202,7 +214,7 @@ module KLib
 				
 				stubs(%i{
 			auto_trim transform validate
-			required optional default_value default_from required_if required_if_present required_if_absent required_if_bool
+			required optional default_value default_from default_proc required_if required_if_present required_if_absent required_if_bool
 			positive non_negative greater_than gt greater_than_equal_to gt_et less_than lt less_than_equal_to lt_et
 					})
 				
@@ -234,7 +246,7 @@ module KLib
 				
 				stubs(%i{
 			validate
-			required optional default_value default_from required_if required_if_present required_if_absent required_if_bool
+			required optional default_value default_from default_proc required_if required_if_present required_if_absent required_if_bool
 					})
 				
 				def initialize(name, deft_req, aliases: [], multi: :error, positive: nil, negative: :no, short: nil, &block)
@@ -352,7 +364,7 @@ module KLib
 				
 				stubs(%i{
 			auto_trim transform validate
-			required optional default_value default_from required_if required_if_present required_if_absent required_if_bool
+			required optional default_value default_from default_proc required_if required_if_present required_if_absent required_if_bool
 			one_of
 					})
 				
@@ -383,7 +395,7 @@ module KLib
 				
 				stubs(%i{
 			auto_trim transform validate
-			required optional default_value default_from required_if required_if_present required_if_absent required_if_bool
+			required optional default_value default_from default_proc required_if required_if_present required_if_absent required_if_bool
 					})
 				
 				def initialize(name, deft_req, aliases: [], multi: :error, split: false, short: nil, &block)
