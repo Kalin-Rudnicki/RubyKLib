@@ -105,7 +105,7 @@ module KLib
 		private
 			
 			def calc_max_length
-				@max_length = @levels.values.map { |val| val.output_name.length }.maxi
+				@max_length = @levels.values.map { |val| val.output_name.length }.max
 				nil
 			end
 			

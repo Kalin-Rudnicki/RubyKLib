@@ -41,8 +41,10 @@ module KLib
 				ArgumentChecking.type_check(parent_mod, :parent_mod, NilClass, Module)
 				mod, execute, specs, sub_specs, extra_argv, illegal_keys, bad_keys = spec_gen.__data
 				
-				raise "You can not have non-sub-specs without an execute" if specs.any? && execute.nil?
-				raise "ParseClass with no specs or argv" if specs.empty? && sub_specs.empty? && !extra_argv
+				@trivial = specs.empty? && !extra_argv
+				has_subs = sub_specs.any?
+				raise "Trivial... no specs, argv, or sub-specs" if @trivial && !has_subs
+				raise "Non trivial with no execute" if !@trivial && execute.nil?
 				
 				if mod.is_a?(Module)
 					@mod = mod
@@ -143,9 +145,26 @@ module KLib
 						elsif @extra_argv
 						elsif $gnu_matches.any?
 							$stderr.puts("Ambiguous call '#{argv[0]}': #{$gnu_matches.map { |mat| mat.tr('_', '-') }.join(', ')}")
+							$stderr.puts(@help)
 							exit(1)
+						else
+							if argv.include?('--help-extra')
+								puts(@help_extra)
+								exit(0)
+							elsif argv.include?('--help')
+								puts(@help)
+								exit(0)
+							elsif @trivial
+								$stderr.puts("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
+								$stderr.puts(@help)
+								exit(1)
+							end
 						end
 					end
+				elsif @trivial
+					$stderr.puts("Must make a call, options: #{@all_subs.join(', ')}")
+					$stderr.puts(@help)
+					exit(1)
 				end
 				
 				argv.each do |arg|
