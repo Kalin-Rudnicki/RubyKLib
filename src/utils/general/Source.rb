@@ -213,8 +213,11 @@ module KLib
 			def unmark
 				@mark = nil
 			end
-			def mark
-				@mark = @idx
+			def mark(backup = 1)
+				ArgumentChecking.type_check(backup, :backup, Integer)
+				raise "backup must be >= 0" if backup < 0
+				raise "backup past start" if backup > @idx
+				@mark = @idx - backup
 				nil
 			end
 			
@@ -222,10 +225,12 @@ module KLib
 				!@mark.nil?
 			end
 			
-			def span(one_back = true)
-				ArgumentChecking.boolean_check(one_back, :one_back)
+			def span(backup = 1)
+				ArgumentChecking.type_check(backup, :backup, Integer)
 				raise "No mark" if @mark.nil?
-				[@mark, (@idx - (one_back ? 1 : 0))]
+				raise "backup must be >= 0" if backup < 0
+				raise "backup past mark" if @idx - backup < @mark
+				[@mark, @idx - backup]
 			end
 			
 			def backup(dist = 1)
