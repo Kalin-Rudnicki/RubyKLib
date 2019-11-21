@@ -195,8 +195,8 @@ module KLib
 			
 			set_log_tolerance(hash_args[:log_tolerance])
 			set_display([:level, :thread, :time].map { |k| [k, hash_args["display_#{k}".to_sym]] }.to_h)
-			add_source(hash_args[:default_out], :target => :out, :range => :over)
-			add_source(hash_args[:default_err], :target => :err, :range => :over)
+			add_source(hash_args[:default_out], target: :out, range: :over)
+			add_source(hash_args[:default_err], target: :err, range: :over)
 		end
 		
 		def set_log_tolerance(log_level_name, hash_args = {})
@@ -222,16 +222,16 @@ module KLib
 				begin
 					File.new(source, 'w').close
 				rescue => e
-					raise ::RuntimeError.new("Issue creating file '#{source}'. [#{e.class.inspect}]")
+					::Kernel.raise ::RuntimeError.new("Issue creating file '#{source}'. [#{e.class.inspect}]")
 				end
 			end
 			hash_args = ::KLib::HashNormalizer.normalize(hash_args) do |norm|
-				norm.target.required.enum_check(:out, :err)
-				norm.range.required.enum_check(:always, :over, :under)
+				norm.target(:to).required.enum_check(:out, :err)
+				norm.range.default_value(:over).enum_check(:always, :over, :under)
 			end
-			raise SourceAlreadyAddedError.new(source) if @all_sources.include?(source)
+			::Kernel.raise SourceAlreadyAddedError.new(source) if @sources[hash_args[:target]].key?(source)
 			@all_sources << source
-			@sources[hash_args[:target]][source] = { :ranges => hash_args[:range] == :always ? [:over, :under] : [hash_args[:range]], :break => nil }
+			@sources[hash_args[:target]][source] = { ranges: hash_args[:range] == :always ? [:over, :under] : [hash_args[:range]], break: nil }
 		end
 		
 		def valid_levels
