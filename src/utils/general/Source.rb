@@ -252,6 +252,22 @@ module KLib
 				@idx >= @source.length
 			end
 			
+			def span_message(msg, *args)
+				@source.post_span_message(msg, *self.span(*args))
+			end
+			
+			def last_char_message(msg)
+				@source.post_span_message(msg, @idx - 1, @idx - 1)
+			end
+			
+			alias :original_method_missing :method_missing
+			def method_missing(sym, *args, **hash_args, &block)
+				if @source.respond_to?(sym)
+					@source.send(sym, *args, **hash_args, &block)
+				else
+					original_method_missing(sym, *args, **hash_args, &block)
+				end
+			end
 		end
 		
 	end
