@@ -34,14 +34,14 @@ module KLib
 			ArgumentChecking.type_check(idx, :idx, Integer)
 			raise ArgumentError.new("idx out of bounds 0 <= #{idx} <= #{@length}") if idx < 0 || idx > @length
 			tmp = idx
-			tmp -= 1 while idx > 0 && @string[idx - 1] != "\n"
+			tmp -= 1 while tmp > 0 && @string[tmp - 1] != "\n"
 			tmp
 		end
 		def line_no_of(idx)
 			ArgumentChecking.type_check(idx, :idx, Integer)
 			raise ArgumentError.new("idx out of bounds 0 <= #{idx} <= #{@length}") if idx < 0 || idx > @length
 			line_no = @line_starts.length - 1
-			line_no -= 1 while idx < @line_starts[line_no]
+			line_no -= 1 while idx > 0 && idx < @line_starts[line_no]
 			line_no
 		end
 		
@@ -109,6 +109,7 @@ module KLib
 			ArgumentChecking.type_check(io, :io, IO)
 			ArgumentChecking.type_check(color_start, :color_start, Integer)
 			raise ArgumentError.new("color_start must be >= 0, given: #{color_start}") if color_start < 0
+			
 			
 			color_idx = color_start
 			if @span_messages.empty?
@@ -210,27 +211,52 @@ module KLib
 				c
 			end
 			
-			def unmark
-				@mark = nil
+			def pop_mark
+				@mark.pop
 			end
 			def mark(backup = 1)
 				ArgumentChecking.type_check(backup, :backup, Integer)
 				raise "backup must be >= 0" if backup < 0
 				raise "backup past start" if backup > @idx
-				@mark = @idx - backup
+				tmp_idx = @idx
+				tmp_line_no = @line_no
+				backup.times do
+					tmp_idx -= 1
+					tmp_line_no -= 1 if @source[tmp_idx] == "\n"
+				end
+				@mark << { idx: tmp_line_no, line_no: tmp_line_no }
 				nil
 			end
 			
 			def mark?
-				!@mark.nil?
+				@mark.any?
 			end
 			
-			def span(backup = 1)
+			def span(backup = 1, pop_mark: false)
 				ArgumentChecking.type_check(backup, :backup, Integer)
-				raise "No mark" if @mark.nil?
+				ArgumentChecking.boolean_check(pop_mark, :pop_mark)
+				raise "No mark" unless mark?
 				raise "backup must be >= 0" if backup < 0
 				raise "backup past mark" if @idx - backup < @mark
-				[@mark, @idx - backup]
+				span = [@mark.last[:idx], @idx - backup]
+				self.pop_mark if pop_mark
+				span
+			end
+			def line_no_span(backup = 1, pop_mark: false)
+				ArgumentChecking.type_check(backup, :backup, Integer)
+				ArgumentChecking.boolean_check(pop_mark, :pop_mark)
+				raise "No mark" unless mark?
+				raise "backup must be >= 0" if backup < 0
+				raise "backup past mark" if @idx - backup < @mark
+				tmp_idx = @idx
+				tmp_line_no = @line_no
+				backup.times do
+					tmp_idx -= 1
+					tmp_line_no -= 1 if @source[tmp_idx] == "\n"
+				end
+				line_no_span = [@mark.last[:line_no], tmp_line_no]
+				self.pop_mark if pop_mark
+				line_no_span
 			end
 			
 			def backup(dist = 1)
@@ -244,7 +270,7 @@ module KLib
 			def restart
 				@idx = 0
 				@line_no = 1
-				unmark
+				@mark = []
 				nil
 			end
 			
@@ -261,11 +287,11 @@ module KLib
 			end
 			
 			alias :original_method_missing :method_missing
-			def method_missing(sym, *args, **hash_args, &block)
+			def method_missing(sym, *args, &block)
 				if @source.respond_to?(sym)
-					@source.send(sym, *args, **hash_args, &block)
+					@source.send(sym, *args, &block)
 				else
-					original_method_missing(sym, *args, **hash_args, &block)
+					original_method_missing(sym, *args, &block)
 				end
 			end
 		end
