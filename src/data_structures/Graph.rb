@@ -1,5 +1,5 @@
 
-require_relative '../../src/utils/validation/ArgumentChecking'
+require_relative '../utils/validation/ArgumentChecking'
 require 'set'
 
 module KLib
