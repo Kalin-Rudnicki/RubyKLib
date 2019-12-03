@@ -104,6 +104,10 @@ module KLib
 			nil
 		end
 		
+		def vertex?(v_name)
+			@vertices.key?(v_name)
+		end
+		
 		def adjacent?(v1_name, v2_name, auto_add: @auto_add_default)
 			v1 = self[v1_name, auto_add: auto_add]
 			v2 = self[v2_name, auto_add: auto_add]
