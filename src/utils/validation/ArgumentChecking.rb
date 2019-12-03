@@ -1,9 +1,22 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../general/RaiseNotMe'
-end
+require_relative '../general/RaiseNotMe'
 
-module Boolean; end
+module Boolean
+	
+	def self.parse(str, name = nil)
+		KLib::ArgumentChecking.type_check(str, :str, String)
+		KLib::ArgumentChecking.type_check(name, :name, Symbol, String, NilClass)
+		case str
+			when "true", "TRUE"
+				true
+			when "false", "FALSE"
+				false
+			else
+				raise "#{name.nil? ? str.inspect : "Parameter '#{name}' (#{str.inspect})"} does not look like a boolean"
+		end
+	end
+	
+end
 
 module KLib
 	
