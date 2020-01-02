@@ -224,7 +224,7 @@ module KLib
 					tmp_idx -= 1
 					tmp_line_no -= 1 if @source[tmp_idx] == "\n"
 				end
-				@mark << { idx: tmp_line_no, line_no: tmp_line_no }
+				@mark << { idx: tmp_idx, line_no: tmp_line_no }
 				nil
 			end
 			
@@ -237,7 +237,7 @@ module KLib
 				ArgumentChecking.boolean_check(pop_mark, :pop_mark)
 				raise "No mark" unless mark?
 				raise "backup must be >= 0" if backup < 0
-				raise "backup past mark" if @idx - backup < @mark.last[:idx]
+				raise "backup past mark" if @idx - backup < @mark
 				span = [@mark.last[:idx], @idx - backup]
 				self.pop_mark if pop_mark
 				span
