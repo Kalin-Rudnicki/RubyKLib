@@ -1,4 +1,5 @@
 
+require_relative '../../formatting/ColorString'
 require_relative 'spec_generator'
 require_relative 'spec_stubs'
 require_relative '../GnuMatch'
@@ -18,7 +19,13 @@ module KLib
 		BASE_10_INT = /^\d+$/
 		BASE_16_INT = /^0x[0-9a-fA-F]+$/
 		
+		LEFT = 4
+		RIGHT = 4
+		CENTER = 36 + RIGHT
+		
 		class Blueprint
+			
+			attr_reader :name, :comments
 			
 			SPLIT = /[-_]/
 			
@@ -60,6 +67,9 @@ module KLib
 				@instance.instance_variable_set(:@mod, @mod)
 				@instance.instance_variable_set(:@blueprint, self)
 				@instance.define_method(:execute, &execute) if execute
+				
+				@name = @mod.to_s.split('::')[-1].to_snake.tr('_', '-').to_sym
+				@comments = spec_gen.comments
 				
 				@sub_specs = {}
 				@sub_spec_aliases = {}
@@ -111,8 +121,38 @@ module KLib
 				
 				# help
 				
-				@help = 'help'
-				@help_extra = 'help_extra'
+				@help = "#{"Usage".red}: #{File.basename($0)} [Options]"
+				
+				@help << "\n\n#{" " * CLI::LEFT}#{"<SubCalls>".red}" if @sub_specs.any?
+				@sub_specs.each_value do |spec|
+					@help << "\n#{" " * CLI::LEFT}#{spec.name.to_s.ljust(CLI::CENTER).green}"
+					spec.comments.each_with_index do |c, i|
+						@help << "\n#{" " * (CLI::LEFT + CLI::CENTER)}" unless i == 0
+						@help << c
+					end
+				end
+				
+				@help << "\n\n#{" " * CLI::LEFT}#{"<Params>".red}" if @params.any?
+				@help_extra = @help.dup
+				
+				@params_by_name.each_value do |param|
+					help_name = param.help_name
+					@help << "\n#{" " * CLI::LEFT}#{help_name.ljust(CLI::CENTER)}"
+					@help_extra << "\n#{" " * CLI::LEFT}#{help_name.ljust(CLI::CENTER)}"
+					param.comments.each_with_index do |c, i|
+						@help << "\n#{" " * (CLI::LEFT + CLI::CENTER)}" if i > 0 || help_name.length > (CLI::CENTER - CLI::RIGHT)
+						@help << c
+						@help_extra << "\n#{" " * (CLI::LEFT + CLI::CENTER)}" if i > 0 || help_name.length > (CLI::CENTER - CLI::RIGHT)
+						@help_extra << c
+					end
+					param.comments_extra.each_with_index do |c, i|
+						@help_extra << "\n#{" " * (CLI::LEFT + CLI::CENTER)}" if i > 0 || param.comments.any? || help_name.length > (CLI::CENTER - CLI::RIGHT)
+						@help_extra << c
+					end
+				end
+				
+				@help << "\n\nSee -H, --help-extra for a more detailed help message"
+				@help_extra << "\n\nSee -h, --help for a less detailed help message"
 				
 				# priority
 				
@@ -136,6 +176,7 @@ module KLib
 				new_argv = []
 				parsed = @params_by_name.values.map { |v| [v, []] }.to_h
 				
+				invalid_call = false
 				if argv.length > 0
 					if SUB_SPEC.match?(argv[0])
 						match = GnuMatch.multi_match(argv[0], @all_subs, split: SPLIT)
@@ -147,22 +188,25 @@ module KLib
 							$stderr.puts("Ambiguous call '#{argv[0]}': #{$gnu_matches.map { |mat| mat.tr('_', '-') }.join(', ')}")
 							$stderr.puts(@help)
 							exit(1)
-						else
-							if argv.include?('--help-extra')
-								puts(@help_extra)
-								exit(0)
-							elsif argv.include?('--help')
-								puts(@help)
-								exit(0)
-							elsif @trivial
-								$stderr.puts("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
-								$stderr.puts(@help)
-								exit(1)
-							end
+						elsif @trivial
+							invalid_call = true
 						end
 					end
 				elsif @trivial
 					$stderr.puts("Must make a call, options: #{@all_subs.join(', ')}")
+					$stderr.puts(@help)
+					exit(1)
+				end
+				
+				if argv.include?('--help-extra') || argv.include?('-H')
+					puts(@help_extra)
+					exit(0)
+				elsif argv.include?('--help') || argv.include?('-h')
+					puts(@help)
+					exit(0)
+				end
+				if invalid_call
+					$stderr.puts("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
 					$stderr.puts(@help)
 					exit(1)
 				end

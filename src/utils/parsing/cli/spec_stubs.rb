@@ -124,16 +124,19 @@ module KLib
 			# =====| Required/Optional/Defaults |=====
 			
 			def required
+				@comments_extra << "Required"
 				@default = { type: :required }
 				self
 			end
 			
 			def optional
+				@comments_extra << "Optional"
 				@default = { type: :optional }
 				self
 			end
 			
 			def default_value(val)
+				@comments_extra << "Default: #{val}"
 				@default = { type: :default_value, value: val }
 				self
 			end
@@ -142,30 +145,34 @@ module KLib
 				ArgumentChecking.type_check(other_param, :other_param, Symbol)
 				raise ArgumentError.new("Param 'other_param' (#{other_param}) is not a valid param name") unless CLI::LOWER_REGEX.match?(other_param.to_s)
 				
+				@help_extra << "Default: #{other_param.to_s.upcase}"
 				@default = { type: :default_from, priority: [other_param], from: other_param }
 				self
 			end
 			
-			def default_proc(*priority, &block)
+			def default_proc(*priority, message: , &block)
 				raise ArgumentError.new("This method requires a block") unless block
 				ArgumentChecking.type_check_each(priority, :priority, Symbol)
 				
+				@help_extra << "Default: #{message}"
 				@default = { type: :default_proc, priority: priority, proc: block }
 				self
 			end
 			
-			def required_if(*priority, &block)
+			def required_if(*priority, message: , &block)
+				ArgumentChecking.type_check(message, :message, String)
 				raise ArgumentError.new("This method requires a block") unless block
 				
+				@help_extra << "Required if #{message}"
 				@default = { type: :required_if, if: block, priority: priority }
 				self
 			end
 			
 			def required_if_present(other_param)
-				required_if(other_param) { |already_parsed| already_parsed.key?(other_param) }
+				required_if(other_param, message: "#{other_param.to_s.upcase} is present") { |already_parsed| already_parsed.key?(other_param) }
 			end
 			def required_if_absent(other_param)
-				required_if(other_param) { |already_parsed| !already_parsed.key?(other_param) }
+				required_if(other_param, message: "#{other_param.to_s.upcase} is absent") { |already_parsed| !already_parsed.key?(other_param) }
 			end
 			
 			def required_if_bool(other_param, val = true, missing: false)
@@ -174,7 +181,7 @@ module KLib
 				ArgumentChecking.boolean_check(val, :val)
 				ArgumentChecking.type_check(missing, :missing, NilClass, Boolean)
 				
-				required_if(other_param) do |already_parsed|
+				required_if(other_param, message: "#{other_param.to_s.upcase} == #{val}") do |already_parsed|
 					if already_parsed.key?(other_param)
 						already_parsed[other_param] == val
 					else
@@ -192,39 +199,73 @@ module KLib
 			# =====| Numbers |=====
 			
 			def positive
-				validate(proc { |val, name| "#{name} must be positive, given: #{val}" }) { |val| val > 0 }
+				@comments_extra << "#{@name.to_s.upcase} > 0"
+				validate(proc { |val, name| "#{name.to_s.upcase} must be positive, given: #{val}" }) { |val| val > 0 }
 				self
 			end
 			
 			def non_negative
-				validate(proc { |val, name| "#{name} must be non-negative, given: #{val}" }) { |val| val >= 0 }
+				@comments_extra << "#{@name.to_s.upcase} >= 0"
+				validate(proc { |val, name| "#{name.to_s.upcase} must be non-negative, given: #{val}" }) { |val| val >= 0 }
 				self
 			end
 			
-			def greater_than(key)
-				ArgumentChecking.type_check(key, :key, Symbol)
-				validate(proc { |val, name, hash| "#{name} must be greater than #{key} (#{hash[key]}), given: #{val}" }, priority: key) { |val, hash| val > hash[key] }
+			def greater_than(obj)
+				ArgumentChecking.type_check(obj, :obj, Integer, Symbol)
+				@comments_extra << "#{@name.to_s.upcase} > #{obj.to_s.upcase}"
+				case obj
+					when Symbol
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be greater than #{obj.to_s.upcase} (#{hash[obj]}), given: #{val}" }, priority: obj) { |val, hash| val > hash[obj] }
+					when Integer
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be greater than #{obj}, given: #{val}" }) { |val, hash| val > obj }
+					else
+						raise "What is going on?"
+				end
 				self
 			end
 			alias :gt :greater_than
 			
-			def greater_than_equal_to(key)
-				ArgumentChecking.type_check(key, :key, Symbol)
-				validate(proc { |val, name, hash| "#{name} must be greater than or equal to #{key} (#{hash[key]}), given: #{val}" }, priority: key) { |val, hash| val >= hash[key] }
+			def greater_than_equal_to(obj)
+				ArgumentChecking.type_check(obj, :obj, Integer, Symbol)
+				@comments_extra << "#{@name.to_s.upcase} >= #{obj.to_s.upcase}"
+				case obj
+					when Symbol
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be greater than or equal to #{obj.to_s.upcase} (#{hash[obj]}), given: #{val}" }, priority: obj) { |val, hash| val >= hash[obj] }
+					when Integer
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be greater than or equal to #{obj}, given: #{val}" }) { |val, hash| val >= obj }
+					else
+						raise "What is going on?"
+				end
 				self
 			end
 			alias :gt_et :greater_than_equal_to
 			
-			def less_than(key)
-				ArgumentChecking.type_check(key, :key, Symbol)
-				validate(proc { |val, name, hash| "#{name} must be less than #{key} (#{hash[key]}), given: #{val}" }, priority: key) { |val, hash| val < hash[key] }
+			def less_than(obj)
+				ArgumentChecking.type_check(obj, :obj, Integer, Symbol)
+				@comments_extra << "#{@name.to_s.upcase} < #{obj.to_s.upcase}"
+				case obj
+					when Symbol
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be less than #{obj.to_s.upcase} (#{hash[obj]}), given: #{val}" }, priority: obj) { |val, hash| val < hash[obj] }
+					when Integer
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be less than #{obj}, given: #{val}" }) { |val, hash| val < obj }
+					else
+						raise "What is going on?"
+				end
 				self
 			end
 			alias :lt :less_than
 			
-			def less_than_equal_to(key)
-				ArgumentChecking.type_check(key, :key, Symbol)
-				validate(proc { |val, name, hash| "#{name} must be less than or equal to #{key} (#{hash[key]}), given: #{val}" }, priority: key) { |val, hash| val <= hash[key] }
+			def less_than_equal_to(obj)
+				ArgumentChecking.type_check(obj, :obj, Integer, Symbol)
+				@comments_extra << "#{@name.to_s.upcase} <= #{obj.to_s.upcase}"
+				case obj
+					when Symbol
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be less than or equal to #{obj.to_s.upcase} (#{hash[obj]}), given: #{val}" }, priority: obj) { |val, hash| val <= hash[obj] }
+					when Integer
+						validate(proc { |val, name, hash| "#{name.to_s.upcase} must be less than or equal to #{obj}, given: #{val}" }) { |val, hash| val <= obj }
+					else
+						raise "What is going on?"
+				end
 				self
 			end
 			alias :lt_et :less_than_equal_to
@@ -233,7 +274,8 @@ module KLib
 			
 			def one_of(*options)
 				options = options[0] if options.length == 1 && options[0].is_a?(Array)
-				validate(proc { |val, name| "#{name} must be one of #{options.join(', ')}, given: #{val}" }) { |val| options.include?(val) }
+				@comments_extra << "Values: #{options.join(', ')}"
+				validate(proc { |val, name| "#{name.to_s.upcase} must be one of #{options.join(', ')}, given: #{val}" }) { |val| options.include?(val) }
 				self
 			end
 			
