@@ -42,7 +42,7 @@ module KLib
 					
 					logger.log(:print, "Starting 'instance-#{inst_num}'")
 					logger.break(:type => :open)
-					logger.log(:info, "instance: #{inst.inspect}")if inspect_instances
+					logger.log(:info, "instance: #{inst.inspect}") if inspect_instances
 					logger.break
 					
 					ran_methods = []
@@ -187,10 +187,11 @@ module KLib
 			TESTS_ERRORED =  12
 			
 			cli_spec(extra_argv: true) do |spec|
-				spec.symbol(:log_level).default_value(:important).one_of(LogLevelManager::DEFAULT_LOG_LEVELS)
-				spec.boolean(:inspect_instances, negative: :dont).default_value(false)
+				spec.symbol(:log_level, short: :l).default_value(:important).one_of(LogLevelManager::DEFAULT_LOG_LEVELS).comment("Minimum log level to be displayed")
+				spec.boolean(:inspect_instances, negative: :dont, short: :I_i).default_value(false).comment("Inspect test instances in log")
 				
 				spec.execute do
+					# TODO : remove?
 					show_params
 					
 					FileUtils.rm_rf(BASE_DIR)
@@ -200,6 +201,7 @@ module KLib
 					logger = KLib::Logger.new(:log_tolerance => @log_level)
 					logger.add_source(File.new(File.join(BASE_DIR, 'log.log'), 'w'), :target => :out, :range => :always)
 					
+					# TODO : remove?
 					puts(Dir.pwd)
 					
 					logger.break

@@ -10,6 +10,8 @@ module KLib
 		
 		class SpecGenerator
 			
+			attr_reader :comments
+			
 			def initialize(mod, *args, **hash_args, &block)
 				raise ArgumentError.new("Block is required for spec creation") unless block
 				ArgumentChecking.type_check(mod, :mod, Module, Symbol)
@@ -19,6 +21,7 @@ module KLib
 					norm.extra_argv.default_value(false).boolean_check # Collect into @argv = []
 					norm.illegal_keys.default_value(:error).enum_check(:error, :warn, :no_warn) # ['--illegal-key'] => error: (error, illegal key), arg: (pretends it doesnt look like a key)
 					norm.bad_keys.default_value(:error).enum_check(:error, :illegal)
+					norm.comments(:comment).default_value([]).type_check(Array).type_check_each(String)
 				end
 				
 				@mod = mod
@@ -29,6 +32,7 @@ module KLib
 				@extra_argv = hash_args[:extra_argv]
 				@illegal_keys = hash_args[:illegal_keys]
 				@bad_keys = hash_args[:bad_keys]
+				@comments = hash_args[:comments]
 				block.call(self)
 				
 				nil
@@ -105,7 +109,7 @@ module KLib
 			class Spec
 				
 				DEFAULT_SPLIT = /\s*,\s*/
-				attr_reader :name, :aliases, :default
+				attr_reader :name, :aliases, :default, :short, :comments, :comments_extra
 				attr_reader :multi, :split
 				attr_reader :validate_transform
 				
@@ -136,6 +140,7 @@ module KLib
 					@priority = []
 					@validate_transform = []
 					@comments = []
+					@comments_extra = []
 					nil
 				end
 				
@@ -150,6 +155,10 @@ module KLib
 					ArgumentChecking.type_check_each(comments, :comments, String)
 					@comments += comments
 					self
+				end
+				
+				def help_name
+					"#{@short.any? ? "#{"-#{@short.keys.first.to_s}".cyan}, " : ""}#{"--#{@name.to_s.tr('_', '-')}".cyan} #{@name.to_s.upcase.blue}"
 				end
 				
 				def __parse(instance, parsed)
@@ -203,6 +212,7 @@ module KLib
 					end
 					
 					@short = short.nil? ? {} : { short => @name }
+					@comments_extra << "Integer"
 					
 					block.call(self) if block
 					nil
@@ -235,6 +245,7 @@ module KLib
 					transform { |val| val.to_f }
 					
 					@short = short.nil? ? {} : { short => @name }
+					@comments_extra << "Float"
 					
 					block.call(self) if block
 					nil
@@ -273,6 +284,7 @@ module KLib
 					@short = {}
 					unless short.nil?
 						t, f = short.to_s.split('_')
+						raise "positive-short can not equal negative-short" if t == f
 						@short[t.to_sym] = @pos if t.length > 0
 						@short[f.to_sym] = @neg if f.length > 0
 					end
@@ -291,10 +303,47 @@ module KLib
 						@aliases.each { |a| @mappings[:"#{@negative}_#{a}"] = { to: @neg } }
 					end
 					
+					@comments_extra << "Boolean"
+					
 					block.call(self) if block
 					nil
 				end
-			
+				
+				def help_name
+					short = nil
+					if @short.any?
+						inv = @short.invert
+						if @positive
+							if @negative
+								short = "-(#{inv[@pos]}/#{inv[@neg]})"
+							else
+								short = "-[#{inv[@pos]}]#{inv[@neg]}"
+							end
+						else
+							if @negative
+								short = "-[#{inv[@neg]}]#{inv[@pos]}"
+							else
+								raise "What is going on?"
+							end
+						end
+					end
+					long = ""
+					if @positive
+						if @negative
+							long = "--(#{@positive.to_s.tr('_', '-')}/#{@negative.to_s.tr('_', '-')}})-#{@name.to_s.tr('_', '-')}"
+						else
+							long = "--[#{@positive.to_s.tr('_', '-')}-]#{@name.to_s.tr('_', '-')}"
+						end
+					else
+						if @negative
+							long = "--[#{@negative.to_s.tr('_', '-')}-]#{@name.to_s.tr('_', '-')}"
+						else
+							raise "What is going on?"
+						end
+					end
+					"#{short.nil? ? "" : "#{short.cyan}, "}#{long.cyan}"
+				end
+				
 			end
 			
 			class FlagSpec < Spec
@@ -330,10 +379,10 @@ module KLib
 					@short = {}
 					unless short.nil?
 						t, f = short.to_s.split('_')
-						if @default
-							@short[t.to_sym] = @pos if t.length > 0
-						else
+						if @dft
 							@short[f.to_sym] = @neg if f.length > 0
+						else
+							@short[t.to_sym] = @pos if t.length > 0
 						end
 					end
 					
@@ -354,8 +403,28 @@ module KLib
 						end
 					end
 					
+					@comments_extra << "Flag"
+					
 					block.call(self) if block
 					nil
+				end
+				
+				def help_name
+					short = @short.any? ? "-#{@short.keys.first}" : nil
+					if @dft
+						if @negative
+							long = "--#{@negative.to_s.tr('_', '-')}-#{@name.to_s.tr('_', '-')}"
+						else
+							long = "--#{@name.to_s.tr('_', '-')}"
+						end
+					else
+						if @positive
+							long = "--#{@positive.to_s.tr('_', '-')}-#{@name.to_s.tr('_', '-')}"
+						else
+							long = "--#{@name.to_s.tr('_', '-')}"
+						end
+					end
+					"#{short.nil? ? "" : "#{short.cyan}, "}#{long.cyan}"
 				end
 			
 			end
@@ -384,6 +453,7 @@ module KLib
 					transform { |val| val.to_sym }
 					
 					@short = short.nil? ? {} : { short => @name }
+					@comments_extra << "String"
 					
 					block.call(self) if block
 					nil
@@ -412,6 +482,7 @@ module KLib
 					@split = split
 					
 					@short = short.nil? ? {} : { short => @name }
+					@comments_extra << "String"
 					
 					block.call(self) if block
 					nil

@@ -108,6 +108,10 @@ module KLib
 				type_check(obj, name, Boolean, &block)
 			end
 			
+			def logger_check(obj, name = :logger)
+				type_check(obj, name, Logger, DeadObject)
+			end
+			
 			def path_check(path, name, type = :any, &block)
 				valid_types = %i{any file dir exe}
 				raise InvalidValidationError.new("Parameter 'path'. No explicit conversion of [#{path.class.inspect}] to [String].") unless path.is_a?(String)
