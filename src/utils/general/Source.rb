@@ -237,7 +237,7 @@ module KLib
 				ArgumentChecking.boolean_check(pop_mark, :pop_mark)
 				raise "No mark" unless mark?
 				raise "backup must be >= 0" if backup < 0
-				raise "backup past mark" if @idx - backup < @mark
+				raise "backup past mark" if @idx - backup < @mark.last[:idx]
 				span = [@mark.last[:idx], @idx - backup]
 				self.pop_mark if pop_mark
 				span
