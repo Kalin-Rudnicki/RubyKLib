@@ -108,8 +108,8 @@ module KLib
 				type_check(obj, name, Boolean, &block)
 			end
 			
-			def logger_check(obj, name = :logger)
-				type_check(obj, name, Logger, DeadObject)
+			def logger_check(obj, name = :logger, &block)
+				type_check(obj, name, Logger, DeadObject, &block)
 			end
 			
 			def path_check(path, name, type = :any, &block)
