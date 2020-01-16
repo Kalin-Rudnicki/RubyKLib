@@ -72,7 +72,9 @@ module KLib
 			@env[key]
 		end
 		
-		var(:color, :KL_COLOR, true, false) # TODO : Put to use
+		# =====| Variables |=====
+		var(:color, :KL_COLOR, true, false)
+		var(:raise_not_me, :KL_RAISE_NOT_ME, :ALL, :START, :NONE, default: :START)
 		# TODO : Add more vars
 		
 	end
