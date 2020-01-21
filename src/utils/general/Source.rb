@@ -169,6 +169,7 @@ module KLib
 			end
 			@eof_messages.each do |msg|
 				io.puts("\e[#{color_idx % MAX_COLOR + COLOR_OFFSET}m#{EOF_LINE_START}#{msg}")
+				color_idx += 1
 			end
 			io.print("\e[0m")
 			
