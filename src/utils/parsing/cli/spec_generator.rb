@@ -493,21 +493,23 @@ module KLib
 					self
 				end
 				
-				def is_file(file_ext = nil)
-					ArgumentChecking.type_check(file_ext, :file_ext, String, NilClass)
-					validate(proc { |val, name| "File extension for #{name} must end in '#{file_ext}', given: '#{file_ext}'" }) { |val| File.extname(val) == file_ext } unless file_ext.nil?
-					is_path
-					validate(proc { |val, name| "#{name} is not a file, given: #{val}" }) { |val| File.file?(val) }
-					self
-				end
-				
 				def is_dir
 					is_path
 					validate(proc { |val, name| "#{name} is not a directory, given: #{val}" }) { |val| File.directory?(val) }
 					self
 				end
 				
-				def has_parent_dir
+				def is_file(file_ext = nil)
+					ArgumentChecking.type_check(file_ext, :file_ext, String, NilClass)
+					validate(proc { |val, name| "File extension for #{name} must end in '#{file_ext}', given: '#{File.extname(val)}'" }) { |val| File.extname(val) == file_ext } unless file_ext.nil?
+					is_path
+					validate(proc { |val, name| "#{name} is not a file, given: #{val}" }) { |val| File.file?(val) }
+					self
+				end
+				
+				def has_parent_dir(file_ext = nil)
+					ArgumentChecking.type_check(file_ext, :file_ext, String, NilClass)
+					validate(proc { |val, name| "File extension for #{name} must end in '#{file_ext}', given: '#{File.extname(val)}'" }) { |val| File.extname(val) == file_ext } unless file_ext.nil?
 					validate(proc { |val, name| "#{name} does not have a valid parent directory: #{File.expand_path(File.join(val, '..'))}" }) do |val|
 						parent = File.expand_path(File.join(val, '..'))
 						File.exist?(parent) && File.directory?(parent)
