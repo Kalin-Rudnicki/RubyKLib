@@ -493,7 +493,9 @@ module KLib
 					self
 				end
 				
-				def is_file
+				def is_file(file_ext = nil)
+					ArgumentChecking.type_check(file_ext, :file_ext, String, NilClass)
+					validate(proc { |val, name| "File extension for #{name} must end in '#{file_ext}', given: '#{file_ext}'" }) { |val| File.extname(val) == file_ext } unless file_ext.nil?
 					is_path
 					validate(proc { |val, name| "#{name} is not a file, given: #{val}" }) { |val| File.file?(val) }
 					self
