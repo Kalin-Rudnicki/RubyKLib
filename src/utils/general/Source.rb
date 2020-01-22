@@ -41,7 +41,7 @@ module KLib
 			ArgumentChecking.type_check(idx, :idx, Integer)
 			raise ArgumentError.new("idx out of bounds 0 <= #{idx} <= #{@length}") if idx < 0 || idx > @length
 			line_no = @line_starts.length - 1
-			line_no -= 1 while idx > 0 && idx < @line_starts[line_no]
+			line_no -= 1 while line_no > 0 && idx < @line_starts[line_no]
 			line_no
 		end
 		
@@ -163,6 +163,9 @@ module KLib
 						end
 					end
 					idx += 1
+				end
+				messages_from_line.each do |message|
+					io.print("\n\e[#{message[:color]}m#{SPAN_LINE_START}#{message[:message]}")
 				end
 				io.print("#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}") if line_start_status == :start
 				io.puts unless line_start_status == :early_stop
