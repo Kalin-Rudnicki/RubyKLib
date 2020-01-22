@@ -167,6 +167,7 @@ module KLib
 				io.print("#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}") if line_start_status == :start
 				io.puts unless line_start_status == :early_stop
 			end
+			# TODO : print after last line
 			@eof_messages.each do |msg|
 				io.puts("\e[#{color_idx % MAX_COLOR + COLOR_OFFSET}m#{EOF_LINE_START}#{msg}")
 				color_idx += 1
@@ -226,6 +227,11 @@ module KLib
 					tmp_line_no -= 1 if @source[tmp_idx] == "\n"
 				end
 				@mark << { idx: tmp_idx, line_no: tmp_line_no }
+				nil
+			end
+			def back_to_mark
+				raise "No mark to backup to" unless @mark
+				@idx = pop_mark[:idx]
 				nil
 			end
 			
