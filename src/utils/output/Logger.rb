@@ -182,17 +182,18 @@ module KLib
 			end
 			
 			@log_level_manager = hash_args[:level_manager]
-			@log_tolerances = {}
+			@log_tolerance = nil
 			@all_sources = ::Set.new
 			@sources = [:out, :err].map { |target| [target, {}] }.to_h
 			@display_params = {}
 			@indent_string = hash_args[:indent_string]
 			@indent = Indent.new
+			@rules = ::Set.new
 			
 			@mutex = ::Mutex.new
 			
 			set_log_tolerance(hash_args[:log_tolerance])
-			set_display([:level, :thread, :time].map { |k| [k, hash_args["display_#{k}".to_sym]] }.to_h)
+			set_display([:level, :thread, :time].map { |k| [k, hash_args[:"display_#{k}"]] }.to_h)
 			add_source(hash_args[:default_out], target: :out, range: :over)
 			add_source(hash_args[:default_err], target: :err, range: :over)
 		end
@@ -200,9 +201,27 @@ module KLib
 		def set_log_tolerance(log_level_name, hash_args = {})
 			::KLib::ArgumentChecking.type_check(log_level_name, 'log_level_name', ::Symbol)
 			hash_args = ::KLib::HashNormalizer.normalize(hash_args) do |norm|
-				norm.rule.default_value(:default).type_check(::Symbol)
 			end
-			@log_tolerances[hash_args[:rule]] = @log_level_manager[log_level_name]
+			@log_tolerance = @log_level_manager[log_level_name]
+		end
+		
+		def add_rule(rule)
+			::KLib::ArgumentChecking.type_check(rule, :rule, ::Symbol, ::Array)
+			case rule
+				when ::Symbol
+					add_rule(rule.to_s.split("-").map { |str| str.to_sym })
+				when ::Array
+					::Kernel.raise "You must supply at least one rule" unless rule.any?
+					name = ""
+					rule.each do |r|
+						name << "-" unless name.empty?
+						name << r.to_s
+						@rules << name.to_sym
+					end
+				else
+					::Kernel.raise "What is going on?"
+			end
+			nil
 		end
 		
 		def set_display(hash_args = {})
@@ -237,7 +256,7 @@ module KLib
 		end
 		
 		def valid_rules
-			@log_tolerances.keys
+			@rules.dup
 		end
 		
 		def indent(on_err: nil, &block)
@@ -261,14 +280,21 @@ module KLib
 			::KLib::ArgumentChecking.type_check(log_level_name, 'log_level_name', ::Symbol)
 			hash_args = ::KLib::HashNormalizer.normalize(hash_args) do |norm|
 				norm.target(:to).default_value(:out).enum_check(:out, :err)
-				norm.rule.default_value(:default).type_check(::Symbol)
+				norm.rule.no_default.type_check(::Symbol)
 				norm.time.default_value(::Time.now).type_check(::Time)
 			end
 			
-			log_tolerance = @log_tolerances.key?(hash_args[:rule]) ? @log_tolerances[hash_args[:rule]] : @log_tolerances[:default]
 			log_level = @log_level_manager[log_level_name]
-			
-			range = (log_level <=> log_tolerance) >= 0 ? :over : :under
+			range =
+			if (log_level <=> @log_tolerance) >= 0
+				if hash_args.key?(:rule) && !@rules.include?(hash_args[:rule])
+					:under
+				else
+					:over
+				end
+			else
+				:under
+			end
 			
 			@mutex.synchronize do
 				header_1, header_2 = log_headers(log_level, hash_args[:time])
@@ -395,5 +421,24 @@ module KLib
 			end
 	
 	end
+	
+end
 
+$klib_logger = KLib::Logger.new(tolerance: :info)
+
+class Class
+	
+	def klib_logger
+		$klib_logger.valid_levels.each do |level|
+			self.define_method(level) do |*args|
+				if self.instance_variable_defined?(:@logger)
+					@logger.log(level, *args)
+				else
+					$klib_logger.log(level, *args)
+				end
+			end
+		end
+		nil
+	end
+	
 end

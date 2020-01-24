@@ -1,11 +1,19 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../../../src/utils/output/Logger'
+require_relative '../../../src/utils/output/Logger'
+
+$klib_logger.set_log_tolerance(:detailed)
+$klib_logger.add_rule(:"rule_1-rule_1.1")
+
+class Klass
+	
+	klib_logger
+	
+	def initialize
+		debug("DEBUG")
+		print("PRINT", rule: :rule_1)
+		
+	end
+	
 end
 
-logger = KLib::Logger.new(:log_tolerance => :always, :display_time => false)
-logger.set_log_tolerance(:print, :rule => :cuz)
-
-logger.print("Hello")
-logger.debug("Hello 2.0", rule: :cuz)
-logger.print("Hello 2.1", rule: :cuz)
+Klass.new
