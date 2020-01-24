@@ -166,8 +166,6 @@ module KLib
 	
 	class Logger < BasicObject
 		
-		attr_reader :indent
-		
 		def initialize(hash_args = {})
 			hash_args = HashNormalizer.normalize(hash_args) do |norm|
 				norm.level_manager.default_value(::KLib::LogLevelManager::DEFAULT_LOG_LEVEL_MANAGER).type_check(::KLib::LogLevelManager)
@@ -240,6 +238,23 @@ module KLib
 		
 		def valid_rules
 			@log_tolerances.keys
+		end
+		
+		def indent(on_err: nil, &block)
+			::KLib::ArgumentChecking.type_check(on_err, :on_err, ::Proc, ::NilClass)
+			if block
+				@indent + 1
+				begin
+					block.()
+				rescue => e
+					on_err.(e) if on_err
+					::Kernel.raise e
+				ensure
+					@indent - 1
+				end
+			else
+				@indent
+			end
 		end
 		
 		def log(log_level_name, value, hash_args = {})

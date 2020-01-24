@@ -22,7 +22,7 @@ module KLib
 			case KLib::Env[:raise_not_me]
 				when :ALL
 					trace.select! { |t| !ignore.include?(t.file) }
-				when :FIRST
+				when :START
 					trace.shift while trace.any? && ignore.include?(trace.first.file)
 				when :NONE
 				else
