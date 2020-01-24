@@ -6,10 +6,13 @@ module KLib
 	
 	class PointerHash
 		
-		def initialize(hash = {})
+		def initialize(hash = {}, pointer_warning: true)
 			KLib::ArgumentChecking.type_check(hash, :hash, Hash, PointerHash)
+			KLib::ArgumentChecking.boolean_check(pointer_warning, :pointer_warning)
 			
 			@hash = {}
+			@pointer_warning = pointer_warning
+			
 			case hash
 				when Hash
 					hash.each_pair { |k, v| self[k] = v }
@@ -28,16 +31,25 @@ module KLib
 			@hash.key?(key)
 		end
 		
-		def [] (key, missing: :error)
+		def [] (key, missing: :error, dereference: false)
 			KLib::ArgumentChecking.enum_check(missing, :missing, %i{nil init error})
+			KLib::ArgumentChecking.boolean_check(dereference, :dereference)
 			if @hash.key?(key)
-				@hash[key]
+				if dereference
+					(@hash[key]).val
+				else
+					@hash[key]
+				end
 			else
 				case missing
 					when :nil
 						nil
 					when :init
-						@hash[key] = Pointer.new
+						if dereference
+							(@hash[key] = Pointer.new).val
+						else
+							@hash[key] = Pointer.new
+						end
 					when :error
 						raise "Missing key: #{key.inspect}"
 					else
@@ -46,8 +58,9 @@ module KLib
 			end
 		end
 		
-		def []= (key, val)
+		def assign(key, val = nil)
 			if @hash.key?(key)
+				$stderr.puts("WARNING: passed Pointer to PointerHash") if val.is_a?(Pointer) && @pointer_warning
 				pointer = @hash[key]
 				pointer.val = val
 				pointer
@@ -55,12 +68,18 @@ module KLib
 				self.set(key, val)
 			end
 		end
+		alias :[]= :assign
 		
 		def set(key, val = nil)
+			$stderr.puts("WARNING: passed Pointer to PointerHash") if val.is_a?(Pointer) && @pointer_warning
 			@hash[key] = Pointer.new(val)
 		end
 		
-		# =====| Parts |=====
+		# =====| Info |=====
+		
+		def size
+			@hash.size
+		end
 		
 		def keys
 			@hash.keys
@@ -74,6 +93,18 @@ module KLib
 			end
 		end
 		
+		def any?(dereference: true, &block)
+			if block
+				if dereference
+					@hash.any? { |k, v| block.(k, v.val) }
+				else
+					@hash.any? { |k, v| block.(k, v) }
+				end
+			else
+				@hash.any?
+			end
+		end
+		
 		# =====| Each |=====
 		
 		def each_key(&block)
@@ -84,6 +115,7 @@ module KLib
 		
 		def each_value(dereference: true, &block)
 			raise "This method requires a block" unless block
+			KLib::ArgumentChecking.boolean_check(dereference, :dereference)
 			if dereference
 				@hash.each_value { |v| block.(v.val) }
 			else
@@ -94,6 +126,7 @@ module KLib
 		
 		def each_pair(dereference: true, &block)
 			raise "This method requires a block" unless block
+			KLib::ArgumentChecking.boolean_check(dereference, :dereference)
 			if dereference
 				@hash.each_pair { |k, v| block.(k, v.val) }
 			else
@@ -108,6 +141,16 @@ module KLib
 			@hash.transform_values { |v| v.val }
 		end
 		alias :to_h :to_hash
+		
+		def map(dereference: true, &block)
+			raise "This method requires a block" unless block
+			KLib::ArgumentChecking.boolean_check(dereference, :dereference)
+			if dereference
+				@hash.map { |k, v| block.(k, v.val) }
+			else
+				@hash.map(&block)
+			end
+		end
 		
 		def transform_keys(&block)
 			raise "This method requires a block" unless block
@@ -130,6 +173,7 @@ module KLib
 		end
 		def transform_values!(dereference: true, &block)
 			raise "This method requires a block" unless block
+			KLib::ArgumentChecking.boolean_check(dereference, :dereference)
 			if dereference
 				@hash.each_value { |v| v.val = block.(v.val) }
 			else
