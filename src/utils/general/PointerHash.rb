@@ -6,12 +6,10 @@ module KLib
 	
 	class PointerHash
 		
-		def initialize(hash = {}, pointer_warning: true)
+		def initialize(hash = {})
 			KLib::ArgumentChecking.type_check(hash, :hash, Hash, PointerHash)
-			KLib::ArgumentChecking.boolean_check(pointer_warning, :pointer_warning)
 			
 			@hash = {}
-			@pointer_warning = pointer_warning
 			
 			case hash
 				when Hash
@@ -60,10 +58,13 @@ module KLib
 		
 		def assign(key, val = nil)
 			if @hash.key?(key)
-				$stderr.puts("WARNING: passed Pointer to PointerHash") if val.is_a?(Pointer) && @pointer_warning
-				pointer = @hash[key]
-				pointer.val = val
-				pointer
+				if val.is_a?(Pointer)
+					@hash[key] = val
+				else
+					pointer = @hash[key]
+					pointer.val = val
+					pointer
+				end
 			else
 				self.set(key, val)
 			end
@@ -71,8 +72,11 @@ module KLib
 		alias :[]= :assign
 		
 		def set(key, val = nil)
-			$stderr.puts("WARNING: passed Pointer to PointerHash") if val.is_a?(Pointer) && @pointer_warning
-			@hash[key] = Pointer.new(val)
+			if val.is_a?(Pointer)
+				@hash[key] = val
+			else
+				@hash[key] = Pointer.new(val)
+			end
 		end
 		
 		# =====| Info |=====
