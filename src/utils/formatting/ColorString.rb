@@ -162,5 +162,3 @@ module KLib
 	end
 
 end
-
-KLib::Env.var(:color, :KL_COLOR, true, false)

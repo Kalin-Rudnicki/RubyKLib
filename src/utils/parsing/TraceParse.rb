@@ -1,7 +1,5 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../validation/ArgumentChecking'
-end
+require_relative '../validation/ArgumentChecking'
 
 module KLib
 	

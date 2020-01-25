@@ -1,10 +1,8 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require 'set'
-	require './../validation/ArgumentChecking'
-	require './../validation/HashNormalizer'
-	require './../formatting/ColorString'
-end
+require 'set'
+require_relative '../validation/ArgumentChecking'
+require_relative '../validation/HashNormalizer'
+require_relative '../formatting/ColorString'
 
 module KLib
 	

@@ -56,4 +56,3 @@ class Object
 end
 
 require_relative 'KLibEnv'
-KLib::Env.var(:raise_not_me, :KL_RAISE_NOT_ME, :ALL, :START, :NONE, default: :START)
