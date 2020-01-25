@@ -19,9 +19,9 @@ KLib::Builders::Builder.new(:spec) do |spec|
 				
 				state.action(line: Integer, code: String).met(:set_action)
 				
-			end.many
+			end.hash(:num)
 			
-		end.many
+		end.hash(:name)
 		
 	end
 	
@@ -58,4 +58,8 @@ end.__build(Tmp)
 spec =
 Dir.chdir(File.dirname(__FILE__)) do
 	Tmp::Spec.parse_file("BuilderTest_TestFile.ssf")
+end
+
+spec.lexer.dfas.each_pair do |name, dfa|
+	puts("name: #{name}, dfa: #{dfa.class}")
 end

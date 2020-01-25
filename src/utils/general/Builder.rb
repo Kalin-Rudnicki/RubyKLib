@@ -9,7 +9,7 @@ module KLib
 		
 		class Class < BasicObject
 			
-			POST_BUILD_WHITELIST = %i{class}
+			POST_BUILD_WHITELIST = %i{class send}
 			
 			class << self
 				attr_reader :hash_args, :rest, :vars, :mets
@@ -70,6 +70,8 @@ module KLib
 							self.instance_eval("#{var} = nil")
 						when :many
 							self.instance_eval("#{var} = []")
+						when :hash
+							self.instance_eval("#{var} = {}")
 						else
 							::Kernel.raise "What is going on?"
 					end
@@ -93,6 +95,9 @@ module KLib
 								__call__(:instance_variable_set, child.__settings.var, child.__klass.new(*args, &block))
 							when :many
 								__call__(:instance_variable_get, child.__settings.var) << child.__klass.new(*args, &block)
+							when :hash
+								child_res = child.__klass.new(*args, &block)
+								__call__(:instance_variable_get, child.__settings.var)[child_res.send(child.__settings.hash_met)] = child_res
 							else
 								::Kernel.raise "What is going on?"
 						end
@@ -230,7 +235,7 @@ module KLib
 		
 			class Settings
 				
-				attr_reader :multi, :var, :met, :builder
+				attr_reader :multi, :var, :met, :builder, :hash_met
 				
 				def initialize(builder)
 					@builder = builder
@@ -252,6 +257,15 @@ module KLib
 				def many(var = :"@#{@builder.__name.to_s.pluralize}")
 					ArgumentChecking.type_check(var, :var, Symbol)
 					@multi = :many
+					@var = var
+					self
+				end
+				
+				def hash(met, var = :"@#{@builder.__name.to_s.pluralize}")
+					ArgumentChecking.type_check(met, :met, Symbol)
+					ArgumentChecking.type_check(var, :var, Symbol)
+					@hash_met = met
+					@multi = :hash
 					@var = var
 					self
 				end
