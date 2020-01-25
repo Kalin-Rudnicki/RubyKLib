@@ -32,7 +32,7 @@ module StringCasing
 		hash_args = KLib::HashNormalizer.normalize(hash_args) do |norm|
 			norm.behavior.default_value(:error).enum_check(:error, :boolean)
 			
-			norm.allow_numerics(:nums).type_check(Boolean)
+			norm.allow_numerics(:nums).default_value(true).type_check(Boolean)
 			norm.camel_start_case(:camel_start).no_default.enum_check(:either, :upcase, :downcase)
 		end
 		raise "You can not set 'camel'" if type == :snake && hash_args.key?(:camel_start_case)

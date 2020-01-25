@@ -284,6 +284,8 @@ module KLib
 				norm.time.default_value(::Time.now).type_check(::Time)
 			end
 			
+			value = value.to_s unless value.is_a?(::String)
+			
 			log_level = @log_level_manager[log_level_name]
 			range =
 			if (log_level <=> @log_tolerance) >= 0

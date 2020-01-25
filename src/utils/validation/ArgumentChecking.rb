@@ -1,7 +1,5 @@
 
-require_relative '../general/RaiseNotMe'
-
-module Boolean
+class Boolean
 	
 	def self.parse(str, name = nil)
 		KLib::ArgumentChecking.type_check(str, :str, String)
@@ -252,3 +250,5 @@ module KLib
 	end
 
 end
+
+require_relative '../general/RaiseNotMe'

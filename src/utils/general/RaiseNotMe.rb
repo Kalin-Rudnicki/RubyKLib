@@ -36,10 +36,13 @@ module KLib
 		
 		def self.ignore_me(&block)
 			raise ArgumentError.new("You must supply a block to this method.") unless block_given?
-			RAISE_IGNORE.unshift(__FILE__).unshift(Trace.call_trace[0].file)
-			block.call
-			RAISE_IGNORE.shift
-			RAISE_IGNORE.shift
+			begin
+				RAISE_IGNORE.unshift(__FILE__).unshift(Trace.call_trace[0].file)
+				block.call
+			ensure
+				RAISE_IGNORE.shift
+				RAISE_IGNORE.shift
+			end
 			nil
 		end
 		
@@ -51,3 +54,6 @@ class Object
 	extend(KLib::RaiseNotMe)
 	include(KLib::RaiseNotMe)
 end
+
+require_relative 'KLibEnv'
+KLib::Env.var(:raise_not_me, :KL_RAISE_NOT_ME, :ALL, :START, :NONE, default: :START)
