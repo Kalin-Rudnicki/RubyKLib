@@ -490,6 +490,7 @@ module KLib
 				
 				def is_path
 					validate(proc { |val, name| "#{name} is not a valid path, given: #{val}" }) { |val| File.exist?(val) }
+					transform { |val| val.gsub("\\", "/") }
 					self
 				end
 				

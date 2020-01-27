@@ -9,8 +9,6 @@ module KLib
 		
 		class Class < BasicObject
 			
-			POST_BUILD_WHITELIST = %i{class send}
-			
 			class << self
 				attr_reader :hash_args, :rest, :vars, :mets
 				
@@ -22,16 +20,19 @@ module KLib
 					eval(str)
 				end
 				
-				alias :parse :new
+				def parse(*args, &block)
+					new(nil, *args, &block)
+				end
 			end
 			
-			def initialize(*args, &block)
+			def initialize(parent_node, *args, &block)
+				@parent_node = parent_node
 				@__building = true
 				
 				klass = __call__(:class)
 				if klass.rest
 					if args.size < klass.hash_args.size - 1
-						::Kernel.raise_not_me ArgumentError.new("wrong number of arguments (given #{args.size}, expected #{klass.hash_args.size - 1}+), args: [#{klass.hash_args.keys.join(', ')}]")
+						::Kernel.raise_not_me ::ArgumentError.new("wrong number of arguments (given #{args.size}, expected #{klass.hash_args.size - 1}+), args: [#{klass.hash_args.keys.join(', ')}]")
 					end
 					klass.hash_args.each_with_index do |a, i|
 						k, v = *a
@@ -51,7 +52,7 @@ module KLib
 					end
 				else
 					if args.size != klass.hash_args.size
-						::Kernel.raise_not_me ArgumentError.new("wrong number of arguments (given #{args.size}, expected #{klass.hash_args.size}), args: [#{klass.hash_args.keys.join(', ')}]")
+						::Kernel.raise_not_me ::ArgumentError.new("wrong number of arguments (given #{args.size}, expected #{klass.hash_args.size}), args: [#{klass.hash_args.keys.join(', ')}]")
 					end
 					klass.hash_args.each_with_index do |a, i|
 						k, v = *a
@@ -90,14 +91,18 @@ module KLib
 				if __call__(:instance_variable_defined?, :@__building)
 					if klass.mets.key?(sym)
 						child = klass.mets[sym]
+						child_res = child.__klass.new(self, *args, &block)
+						# TODO : ?????
 						case child.__settings.multi
 							when :one
-								__call__(:instance_variable_set, child.__settings.var, child.__klass.new(*args, &block))
+								#__call__(:instance_variable_set, child.__settings.var, child_res)
+								::Kernel.eval("#{child.__settings.var} = child_res", ::Kernel.binding)
 							when :many
-								__call__(:instance_variable_get, child.__settings.var) << child.__klass.new(*args, &block)
+								__call__(:instance_variable_get, child.__settings.var) << child_res
+								# ::Kernel.eval("#{child.__settings.var} = child_res", ::Kernel.binding)
 							when :hash
-								child_res = child.__klass.new(*args, &block)
 								__call__(:instance_variable_get, child.__settings.var)[child_res.send(child.__settings.hash_met)] = child_res
+								# ::Kernel.eval("#{child.__settings.var} = child_res", ::Kernel.binding)
 							else
 								::Kernel.raise "What is going on?"
 						end
@@ -105,22 +110,34 @@ module KLib
 						__og_method_missing(sym, *args, &block)
 					end
 				else
-					var = :"@#{sym}"
-					if __call__(:instance_variable_defined?, var)
-						raise ArgumentError.new("wrong number of arguments (given #{args.size}, expected 0})") if args.size > 0
-						__call__(:instance_variable_get, var)
-					elsif POST_BUILD_WHITELIST.include?(sym)
-						__call__(sym, *args)
+					if sym.to_s.end_with?("=")
+						var = :"@#{sym[0..-2]}"
+						::Kernel.raise ::ArgumentError.new("wrong number of arguments (given #{args.size}, expected 1})") if args.size != 1
+						__call__(:instance_variable_set, var, args[0])
 					else
-						__og_method_missing(sym, *args, &block)
+						var = :"@#{sym}"
+						if (begin; __call__(:instance_variable_defined?, var); rescue ::NameError; false; end)
+							::Kernel.raise ::ArgumentError.new("wrong number of arguments (given #{args.size}, expected 0})") if args.size != 0
+							__call__(:instance_variable_get, var)
+						else
+							__call__(sym, *args)
+						end
 					end
 				end
 			end
 			
-			def __call__(met, *args, klass: ::Object)
+			def __call__(met, *args, klass: ::Object, &block)
 				::KLib::ArgumentChecking.type_check(met, :met, ::Symbol)
 				::KLib::ArgumentChecking.type_check(klass, :klass, ::Module)
-				klass.instance_method(met).bind(self).(*args)
+				klass.instance_method(met).bind(self).(*args, &block)
+			end
+			
+			def inspect
+				vars = (__call__(:instance_variables) - %i{@parent_node}).map do |var|
+					res = __call__(:instance_variable_get, var)
+					"#{var}=#{res.inspect}"
+				end
+				"#<#{self.class.to_s.split('::')[-1]}#{vars.any? ? "; " : ""}#{vars.join(", ")}>"
 			end
 			
 		end
@@ -213,6 +230,7 @@ module KLib
 					vars[child.__settings.var] = child.__settings.multi
 					
 					# mets
+					::Kernel.raise "Can not use method parent_node" if child.__settings.met == :parent_node
 					::Kernel.raise "Overloaded method #{child.__settings.met}" if mets.key?(child.__settings.met)
 					mets[child.__settings.met] = child
 				end

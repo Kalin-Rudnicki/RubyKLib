@@ -193,7 +193,7 @@ module KLib
 						end
 					end
 				elsif @trivial
-					$stderr.puts("Must make a call, options: #{@all_subs.join(', ')}")
+					$stderr.puts("Must make a call, options: #{@all_subs.map { |s| s.to_s.tr('_', '-') }.join(', ')}")
 					$stderr.puts(@help)
 					exit(1)
 				end
@@ -491,15 +491,18 @@ module KLib
 						case param.default[:type]
 							when :required
 								$stderr.puts("Missing required arg '#{param.name}'")
+								$stderr.puts(@help)
 								exit(1)
 							when :required_if
 								begin
 									if param.default[:if].(results)
 										$stderr.puts("Missing conditionally required arg '#{param.name}'")
+										$stderr.puts(@help)
 										exit(1)
 									end
 								rescue => e
 									$stderr.puts("UNCAUGHT ERROR with '#{param.name}'")
+									$stderr.puts(@help)
 									exit(1)
 								end
 							when :optional
