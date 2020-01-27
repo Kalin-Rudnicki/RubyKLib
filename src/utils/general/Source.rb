@@ -62,7 +62,10 @@ module KLib
 					break
 				else
 					tmp = @span_messages[idx]
-					if start_idx > tmp.end_idx
+					if start_idx == tmp.start_idx && end_idx == tmp.end_idx
+						tmp.msg << "\n#{msg}"
+						break
+					elsif start_idx > tmp.end_idx
 						idx += 1
 					else 
 						if start_idx < tmp.start_idx
@@ -104,17 +107,21 @@ module KLib
 		COLOR_OFFSET = 31
 		SPAN_LINE_START = "**** "
 		EOF_LINE_START = "**** "
-		def dump(only_message_lines = true, io: $stdout, color_start: 0)
-			ArgumentChecking.boolean_check(only_message_lines, :only_message_lines)
+		NEWLINE_START = ">*** "
+		def dump(*args, io: $stdout)
 			ArgumentChecking.type_check(io, :io, IO)
+			io.puts(self.to_s(*args))
+		end
+		def to_s(only_message_lines = true, color_start: 0)
+			ArgumentChecking.boolean_check(only_message_lines, :only_message_lines)
 			ArgumentChecking.type_check(color_start, :color_start, Integer)
 			raise ArgumentError.new("color_start must be >= 0, given: #{color_start}") if color_start < 0
 			
+			strs = []
 			
 			color_idx = color_start
 			if @span_messages.empty?
-				io.print(@string)
-				io.puts
+				strs << @string
 			else
 				idx = only_message_lines ? start_of_line(@span_messages[0].start_idx) : 0
 				next_msg_idx = 0
@@ -127,31 +134,31 @@ module KLib
 				while idx < @length
 					ch = @string[idx]
 					if line_start_status == :start
-						io.print("#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}")
+						strs << "#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}"
 						line_start_status = :not_start
 					end
 					if current_msg.nil? && !next_msg.nil? && idx == next_msg.start_idx
 						current_msg = next_msg
 						tmp = color_idx % MAX_COLOR + COLOR_OFFSET
-						io.print("\e[#{tmp}m")
+						strs << "\e[#{tmp}m"
 					end
-					io.putc(ch)
+					strs << ch
 					if !current_msg.nil? && idx == current_msg.end_idx
 						messages_from_line << { message: current_msg.msg, color: tmp }
 						current_msg = nil
 						tmp = nil
 						color_idx += 1
-						io.print("\e[0m")
+						strs << "\e[0m"
 						next_msg_idx += 1
 						next_msg = @span_messages[next_msg_idx]
 					end
 					if ch == "\n"
 						line_start_status = :start
 						messages_from_line.each do |message|
-							io.puts("\e[#{message[:color]}m#{SPAN_LINE_START}#{message[:message]}")
+							strs << "\e[#{message[:color]}m#{SPAN_LINE_START}#{message[:message].gsub("\n", "\n#{NEWLINE_START}")}\n"
 						end
 						if messages_from_line.any?
-							io.print("\e[0m") if tmp.nil?
+							strs << "\e[0m" if tmp.nil?
 							messages_from_line = []
 						end
 						if current_msg.nil? && only_message_lines
@@ -165,19 +172,20 @@ module KLib
 					idx += 1
 				end
 				messages_from_line.each do |message|
-					io.print("\n\e[#{message[:color]}m#{SPAN_LINE_START}#{message[:message]}")
+					strs << "\n\e[#{message[:color]}m#{SPAN_LINE_START}#{message[:message].gsub("\n", "\n#{NEWLINE_START}")}"
 				end
-				io.print("#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}") if line_start_status == :start
-				io.puts unless line_start_status == :early_stop
+				strs << "#{tmp.nil? ? "" : "\e[0m"}#{line_no_of(idx).to_s.rjust(4)}: #{tmp.nil? ? "" : "\e[#{tmp}m"}" if line_start_status == :start
+				strs << "\n" unless line_start_status == :early_stop
+				
 			end
 			# TODO : print after last line
 			@eof_messages.each do |msg|
-				io.puts("\e[#{color_idx % MAX_COLOR + COLOR_OFFSET}m#{EOF_LINE_START}#{msg}")
+				strs << "\e[#{color_idx % MAX_COLOR + COLOR_OFFSET}m#{EOF_LINE_START}#{msg.gsub("\n", "\n#{NEWLINE_START}")}"
 				color_idx += 1
 			end
-			io.print("\e[0m")
+			strs << "\e[0m"
 			
-			nil
+			strs.join('')
 		end
 		
 		class Message

@@ -25,12 +25,15 @@ until reader.eof?
 			when nil
 			when :chars
 				source.post_span_message("Variable", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 			when :num
 				source.post_span_message("Number", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 			else
 				nil
 		end
 		source.post_length_message("Operator", reader.idx - 1, 1)
+		source.post_length_message("Msg-2", reader.idx - 1, 1)
 		type = nil
 	elsif CHARS.include?(ch)
 		case type
@@ -39,6 +42,7 @@ until reader.eof?
 			when :chars
 			when :num
 				source.post_span_message("Number", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 				idx = reader.idx - 1
 			else
 				nil
@@ -50,6 +54,7 @@ until reader.eof?
 				idx = reader.idx - 1
 			when :chars
 				source.post_span_message("Variable", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 				idx = reader.idx - 1
 			when :num
 			else
@@ -61,8 +66,10 @@ until reader.eof?
 			when nil
 			when :chars
 				source.post_span_message("Variable", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 			when :num
 				source.post_span_message("Number", idx, reader.idx - 1)
+				source.post_span_message("Msg-2", idx, reader.idx - 1)
 			else
 				nil
 		end
@@ -70,6 +77,7 @@ until reader.eof?
 	else
 		errors += 1
 		source.post_length_message("Illegal character", reader.idx - 1, 1)
+		source.post_length_message("Msg-2", reader.idx - 1, 1)
 	end
 end
 if errors == 0

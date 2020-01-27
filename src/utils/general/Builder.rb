@@ -120,7 +120,12 @@ module KLib
 							::Kernel.raise ::ArgumentError.new("wrong number of arguments (given #{args.size}, expected 0})") if args.size != 0
 							__call__(:instance_variable_get, var)
 						else
-							__call__(sym, *args)
+							begin
+								__call__(sym, *args)
+							rescue ::NameError
+								klass = self.class
+								::Kernel.raise ::NameError.new("no method or instance variable '#{sym}' for #{klass.to_s.split('::')[-1]}, variables: #{__call__(:instance_variables).join(", ")} (#{klass})")
+							end
 						end
 					end
 				end
