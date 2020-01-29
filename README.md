@@ -6,10 +6,6 @@ This is an assortment of utilities for Ruby to make doing common and/or tedious 
 [ArgumentChecking](#argumentchecking)  
 [HashNormalizer](#hashnormalizer)  
 [Logger](#logger)  
-[CaseConversion / StringCasing](#caseconversion--stringcasing)  
-
-### All
-Whole List
 
 ### Documentation
 
@@ -133,8 +129,8 @@ logger.always("And so will this")
 logger.indent do
    logger.print("This will be indented")
 end
-
 ```
+
 #### GnuMatch
 ```ruby
 def self.match(string, options); end
