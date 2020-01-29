@@ -105,6 +105,7 @@ module KLib
 		
 		MAX_COLOR = 6
 		COLOR_OFFSET = 31
+		UNDERLINE_ENDS = [" ", "\t", "\n"]
 		SPAN_LINE_START = "**** "
 		EOF_LINE_START = "**** "
 		NEWLINE_START = ">*** "
@@ -140,7 +141,7 @@ module KLib
 					if current_msg.nil? && !next_msg.nil? && idx == next_msg.start_idx
 						current_msg = next_msg
 						tmp = color_idx % MAX_COLOR + COLOR_OFFSET
-						strs << "\e[#{tmp}m"
+						strs << "\e[#{UNDERLINE_ENDS.include?(@string[current_msg.start_idx]) || UNDERLINE_ENDS.include?(@string[current_msg.end_idx]) ? "4;" : ""}#{tmp}m"
 					end
 					strs << ch
 					if !current_msg.nil? && idx == current_msg.end_idx
@@ -179,6 +180,7 @@ module KLib
 				
 			end
 			# TODO : print after last line
+			strs << "\n"
 			@eof_messages.each do |msg|
 				strs << "\e[#{color_idx % MAX_COLOR + COLOR_OFFSET}m#{EOF_LINE_START}#{msg.gsub("\n", "\n#{NEWLINE_START}")}"
 				color_idx += 1

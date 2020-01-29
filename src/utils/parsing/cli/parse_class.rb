@@ -32,7 +32,7 @@ module KLib
 			LONG_BLACKLIST = [:help, :help_extra, :argv, :parse_data]
 			SHORT_BLACKLIST = [:h, :H]
 			
-			SUB_SPEC = /^[a-z]+(-[a-z]+)*$/
+			SUB_SPEC = /^[a-z]+(-([a-z]+|\d+))*$/
 			BAD_PARAM = /^--(.*)$/
 			PARAM = /^--([a-z]+(?:-(?:[a-z]+|\d+))*)$/
 			PARAM_W_ARG = /^--([a-z]+(?:-(?:[a-z]+|\d+)+)*)=(.*)$/
@@ -185,17 +185,13 @@ module KLib
 							return @mod.const_get(match.to_s.to_camel(false).to_sym).parse(argv[1..-1])
 						elsif @extra_argv
 						elsif $gnu_matches.any?
-							$stderr.puts("Ambiguous call '#{argv[0]}': #{$gnu_matches.map { |mat| mat.tr('_', '-') }.join(', ')}")
-							$stderr.puts(@help)
-							exit(1)
+							error_out("Ambiguous call '#{argv[0]}': #{$gnu_matches.map { |mat| mat.tr('_', '-') }.join(', ')}")
 						elsif @trivial
 							invalid_call = true
 						end
 					end
 				elsif @trivial
-					$stderr.puts("Must make a call, options: #{@all_subs.map { |s| s.to_s.tr('_', '-') }.join(', ')}")
-					$stderr.puts(@help)
-					exit(1)
+					error_out("Must make a call, options: #{@all_subs.map { |s| s.to_s.tr('_', '-') }.join(', ')}")
 				end
 				
 				if argv.include?('--help-extra') || argv.include?('-H')
@@ -206,9 +202,7 @@ module KLib
 					exit(0)
 				end
 				if invalid_call
-					$stderr.puts("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
-					$stderr.puts(@help)
-					exit(1)
+					error_out("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
 				end
 				
 				argv.each do |arg|
@@ -231,12 +225,10 @@ module KLib
 									elsif /^(f|F|false|FALSE)$/.match?(val)
 										val = false
 									else
-										$stderr.puts("Arg must look like /^(t|T|true|TRUE|f|F|false|FALSE)$/ when specifying booleans in the format of --param=val")
-										exit(1)
+										error_out("Arg must look like /^(t|T|true|TRUE|f|F|false|FALSE)$/ when specifying booleans in the format of --param=val")
 									end
 								elsif spec.is_a?(SpecGenerator::FlagSpec)
-									$stderr.puts("You can not specify flags in the form of --param=val")
-									exit(1)
+									error_out("You can not specify flags in the form of --param=val")
 								end
 								parsed[spec] << { param: LONG_PROC.(param) + '=', arg: val }
 							end
@@ -248,8 +240,7 @@ module KLib
 								auto_trim = spec.instance_variable_get(:@auto_trim)
 								val = val.strip if auto_trim
 								if spec.is_a?(SpecGenerator::BooleanSpec) || spec.is_a?(SpecGenerator::FlagSpec)
-									$stderr.puts("You can not specify booleans or flags in the form of -p=val")
-									exit(1)
+									error_out("You can not specify booleans or flags in the form of -p=val")
 								end
 								parsed[spec] << { param: SHORT_PROC.(param) + '=', arg: val }
 							end
@@ -276,27 +267,23 @@ module KLib
 						elsif (match = BAD_PARAM.match(arg)) || (match = BAD_SHORT_PARAM.match(arg))
 							case @bad_keys
 								when :error
-									$stderr.puts("Bad key '#{arg}'")
-									exit(1)
+									error_out("Bad key '#{arg}'")
 								when :illegal
 									case @illegal_keys
 										when :error
-											$stderr.puts("Bad key '#{arg}'")
-											exit(1)
+											error_out("Bad key '#{arg}'")
 										when :warn
 											if @extra_argv
 												$stderr.puts("Bad key '#{arg}' treated as ARGV")
 												new_argv << arg
 											else
-												$stderr.puts("No ARGV for bad key '#{arg}'")
-												exit(1)
+												error_out("No ARGV for bad key '#{arg}'")
 											end
 										when :no_warn
 											if @extra_argv
 												new_argv << arg
 											else
-												$stderr.puts("No ARGV for bad key '#{arg}'")
-												exit(1)
+												error_out("No ARGV for bad key '#{arg}'")
 											end
 										else
 											raise "What is going on?"
@@ -307,16 +294,16 @@ module KLib
 						else
 							if @extra_argv
 								new_argv << arg
+							elsif @sub_specs.any?
+								error_out("Invalid call '#{argv[0]}', options: #{@all_subs.map { |mat| mat.tr('_', '-') }.join(', ')}")
 							else
-								$stderr.puts("No ARGV for arg '#{arg}'")
-								exit(1)
+								error_out("No ARGV for arg '#{arg}'")
 							end
 						end
 					end
 				end
 				if current
-					$stderr.puts("Failed to specify argument for '#{current[:param]}'")
-					exit(1)
+					error_out("Failed to specify argument for '#{current[:param]}'")
 				end
 				
 				results = @extra_argv ? { argv: new_argv } : {}
@@ -334,12 +321,10 @@ module KLib
 							}
 							case param.multi
 								when :error
-									$stderr.puts("Param '#{param.name}' specified multiple times: #{vals.map { |v| v[:param] }.join(', ')}")
-									exit(1)
+									error_out("Param '#{param.name}' specified multiple times: #{vals.map { |v| v[:param] }.join(', ')}")
 								when :error_different
 									if vals.map { |v| v[:arg] }.uniq.length > 1
-										$stderr.puts("Param '#{param.name}' specified multiple times with different values: #{vals.map { |v| v[:param] }.join(', ')}")
-										exit(1)
+										error_out("Param '#{param.name}' specified multiple times with different values: #{vals.map { |v| v[:param] }.join(', ')}")
 									else
 										val = vals.first[:arg]
 									end
@@ -374,15 +359,13 @@ module KLib
 												begin
 													val.each { |v| vt.validate(v,  param.name, results) }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											when Transform
 												begin
 													val = val.map { |v| vt.transform(v,  param.name, results) }
-												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+												rescue CliParseError => e 
+													error_out(e.message)
 												end
 											else
 												raise "What is going on?"
@@ -396,15 +379,13 @@ module KLib
 												begin
 													val.each { |v1| v1.each { |v2| vt.validate(v2, param.name, results) } }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											when Transform
 												begin
 													val = val.map { |v1| v1.map { |v2| vt.transform(v2,  param.name, results) } }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											else
 												raise "What is going on?"
@@ -418,15 +399,13 @@ module KLib
 												begin
 													val.each { |v| vt.validate(v,  param.name, results) }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											when Transform
 												begin
 													val = val.map { |v| vt.transform(v,  param.name, results) }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											else
 												raise "What is going on?"
@@ -444,15 +423,13 @@ module KLib
 												begin
 													vt.validate(val,  param.name, results)
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											when Transform
 												begin
 													val = vt.transform(val,  param.name, results)
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											else
 												raise "What is going on?"
@@ -465,15 +442,13 @@ module KLib
 												begin
 													val.each { |v| vt.validate(v,  param.name, results) }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											when Transform
 												begin
 													val = val.map { |v| vt.transform(v,  param.name, results) }
 												rescue CliParseError => e
-													$stderr.puts(e.message)
-													exit(1)
+													error_out(e.message)
 												end
 											else
 												raise "What is going on?"
@@ -490,20 +465,14 @@ module KLib
 					else
 						case param.default[:type]
 							when :required
-								$stderr.puts("Missing required arg '#{param.name}'")
-								$stderr.puts(@help)
-								exit(1)
+								error_out("Missing required arg '#{param.name}'")
 							when :required_if
 								begin
 									if param.default[:if].(results)
-										$stderr.puts("Missing conditionally required arg '#{param.name}'")
-										$stderr.puts(@help)
-										exit(1)
+										error_out("Missing conditionally required arg '#{param.name}'")
 									end
 								rescue => e
-									$stderr.puts("UNCAUGHT ERROR with '#{param.name}'")
-									$stderr.puts(@help)
-									exit(1)
+									error_out("UNCAUGHT ERROR with '#{param.name}'")
 								end
 							when :optional
 							when :default_value
@@ -545,11 +514,10 @@ module KLib
 					case @illegal_keys
 						when :error
 							if $gnu_matches.any?
-								$stderr.puts("Ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
+								error_out("Ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
 							else
-								$stderr.puts("Unmatched key '#{funct.(param)}'")
+								error_out("Unmatched key '#{funct.(param)}'")
 							end
-							exit(1)
 						when :warn
 							if @extra_argv
 								if $gnu_matches.any?
@@ -561,22 +529,20 @@ module KLib
 								nil
 							else
 								if $gnu_matches.any?
-									$stderr.puts("No ARGV for ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
+									error_out("No ARGV for ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
 								else
-									$stderr.puts("No ARGV for unmatched key '#{funct.(param)}'")
+									error_out("No ARGV for unmatched key '#{funct.(param)}'")
 								end
-								exit(1)
 							end
 						when :no_warn
 							if @extra_argv
 								new_argv << arg
 							else
 								if $gnu_matches.any?
-									$stderr.puts("No ARGV for ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
+									error_out("No ARGV for ambiguous key '#{funct.(param)}': #{$gnu_matches.map { |mat| "#{funct.(mat)}" }.join(', ')}")
 								else
-									$stderr.puts("No ARGV for unmatched key '#{funct.(param)}'")
+									error_out("No ARGV for unmatched key '#{funct.(param)}'")
 								end
-								exit(1)
 							end
 						else
 							raise "What is going on?"
@@ -584,6 +550,14 @@ module KLib
 					nil
 				end
 			end
+			
+			private
+				
+				def error_out(msg)
+					$stderr.puts(msg)
+					$stderr.puts(@help)
+					exit(1)
+				end
 			
 		end
 		

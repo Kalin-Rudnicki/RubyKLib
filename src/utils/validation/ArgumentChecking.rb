@@ -56,6 +56,7 @@ module KLib
 			def type_check_each(obj, name, *valid_types, &block)
 				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_types' must have a length > 0.") unless valid_types.length > 0
+				valid_types = valid_types[0] if valid_types.length == 1 && valid_types[0].is_a?(Enumerable)
 				valid_types = valid_types.map { |t| t == Boolean ? [TrueClass, FalseClass] : [t] }.flatten(1)
 				valid_types.each_with_index { |t, i| raise InvalidValidationError.new("Parameter 'valid_types[#{i}]'. No explicit conversion of [#{t.class.inspect}] to [Module].") unless t.is_a?(Module) }
 				type_check(obj, name, Enumerable)
