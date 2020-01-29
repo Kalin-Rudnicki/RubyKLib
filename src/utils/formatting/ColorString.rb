@@ -1,7 +1,6 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../validation/HashNormalizer'
-end
+require_relative '../validation/HashNormalizer'
+require_relative '../general/KLibEnv'
 
 module KLib
 	
@@ -9,19 +8,7 @@ module KLib
 		
 		INTER_STRING = '#{}'
 		CLEAR_COLORS = "\e[0m"
-		VALID_COLOR_MODES = [:basic, :none]
-		if ENV.key?('KLIB_COLOR')
-			value = ENV['KLIB_COLOR'].downcase.to_sym
-			if VALID_COLOR_MODES.include?(value)
-				COLOR_MODE = value
-			else
-				$stderr.puts("[WARNING]: 'KLIB_COLOR' environment variable has bad value '#{ENV['KLIB_COLOR']}', assuming 'NONE'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
-				COLOR_MODE = :none
-			end
-		else
-			$stderr.puts("[INFO]:    No 'KLIB_COLOR' environment variable set, assuming 'BASIC'. Options: #{VALID_COLOR_MODES.map { |m| "'#{m.to_s.upcase}'" }.join(', ')}.")
-			COLOR_MODE = :basic
-		end
+		COLOR_MODE = Env[:color]
 		
 		COLORS = {
 			:black =>   { :foreground => 30, :background => 40 },
@@ -45,7 +32,7 @@ end
 
 class String
 	
-	def colorize(hash_args = {})
+	def colorize(**hash_args)
 		KLib::ColorString.new(self, hash_args)
 	end
 	
@@ -101,8 +88,6 @@ class String
 	end
 	
 	def de_color
-		# KLib::Trace.call_trace.each { |tr| puts(tr.inspect) }
-		# exit
 		self.gsub(/\e\[(\d+)(;\d+)*m/, '')
 	end
 
@@ -149,16 +134,17 @@ module KLib
 			ArgumentChecking.type_check(string, 'string', String)
 			ArgumentChecking.type_check_each(inter_strings, 'inter_strings', ColorString)
 			
-			split_string = string.split('#{}')
-			raise ArgumentError.new("You must pass in the same number of '\#{}' as strings") unless inter_strings.length == split_string.length - 1
+			split_string = string.split(INTER_STRING)
+			raise ArgumentError.new("You must pass in the same number of '#{INTER_STRING}' as strings") unless inter_strings.length == split_string.length - 1
 			
 			str = CLEAR_COLORS.dup
 			inter_strings.length.times do |idx|
-				str << modifiers.to_s << split_string[idx].gsub("\n", "#{CLEAR_COLORS}\n#{modifiers.to_s}") << inter_strings[idx].to_s
+				mod_str = modifiers.to_s
+				str << mod_str << split_string[idx].gsub("\n", "#{CLEAR_COLORS}\n#{mod_str}") << inter_strings[idx].to_s
 			end
 			str << modifiers.to_s << split_string[-1].gsub("\n", "#{CLEAR_COLORS}\n#{modifiers.to_s}") <<  CLEAR_COLORS
 			
-			@str = COLOR_MODE == :none ? str.de_color : str
+			@str = (COLOR_MODE == true ? str : str.de_color)
 		end
 		
 		def method_missing(sym, *args)

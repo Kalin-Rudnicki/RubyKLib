@@ -1,7 +1,5 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../parsing/TraceParse'
-end
+require_relative '../parsing/TraceParse'
 
 module KLib
 	
@@ -11,7 +9,7 @@ module KLib
 		
 		def raise_not_me(exception)
 			if exception.is_a?(String)
-				exception = RuntimeError.new(exception)
+				exception = StandardError.new(exception)
 			elsif exception.is_a?(Exception)
 			else
 				raise ArgumentError.new("No explicit conversion of [#{exception.class.inspect}] to one of [String, Exception].")
@@ -21,9 +19,16 @@ module KLib
 			ignore = ([trace[0].file] + RAISE_IGNORE).uniq
 			KLib::RAISE_IGNORE.clear
 			
-			if !ENV.key?('RAISE_NOT_ME') && trace.any? { |t| !ignore.include?(t.file) }
-				trace = trace.select { |t| !ignore.include?(t.file) }
+			case KLib::Env[:raise_not_me]
+				when :ALL
+					trace.select! { |t| !ignore.include?(t.file) }
+				when :START
+					trace.shift while trace.any? && ignore.include?(trace.first.file)
+				when :NONE
+				else
+					raise "What is going on?"
 			end
+			
 			trace = trace.map { |t| t.str }
 			exception.set_backtrace(trace)
 			raise exception
@@ -31,10 +36,13 @@ module KLib
 		
 		def self.ignore_me(&block)
 			raise ArgumentError.new("You must supply a block to this method.") unless block_given?
-			RAISE_IGNORE.unshift(__FILE__).unshift(Trace.call_trace[0].file)
-			block.call
-			RAISE_IGNORE.shift
-			RAISE_IGNORE.shift
+			begin
+				RAISE_IGNORE.unshift(__FILE__).unshift(Trace.call_trace[0].file)
+				block.call
+			ensure
+				RAISE_IGNORE.shift
+				RAISE_IGNORE.shift
+			end
 			nil
 		end
 		
@@ -46,3 +54,5 @@ class Object
 	extend(KLib::RaiseNotMe)
 	include(KLib::RaiseNotMe)
 end
+
+require_relative 'KLibEnv'

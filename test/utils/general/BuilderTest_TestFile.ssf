@@ -1,0 +1,72 @@
+parse do |spec|
+	
+	spec.lexer("test/ex-3/ex-3.slf") do |lexer|
+
+		lexer.dfa(:default) do |dfa|
+			dfa.state(0) do |state|
+				state.on(1, "/")
+				state.on(5, " ", "\t", "\n")
+				state.on(6, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
+				state.on(7, "0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
+				state.on(8, ".", "(", ")", ",", ";", "=")
+				state.on(9, "+", "-", "*")
+			end
+			dfa.state(1) do |state|
+				state.on(2, "/")
+				state.on(4, "*")
+				state.set_action(7, ":op")
+			end
+			dfa.state(2) do |state|
+				state.on(2, "\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\a", "\b", "\t", "\v", "\f", "\r", "\x0E", "\x0F", "\x10", "\x11", "\x12", "\x13", "\x14", "\x15", "\x16", "\x17", "\x18", "\x19", "\x1A", "\e", "\x1C", "\x1D", "\x1E", "\x1F", " ", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?", "@", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "[", "\\", "]", "^", "_", "`", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "{", "|", "}", "~", "\x7F")
+				state.on(3, "\n")
+			end
+			dfa.state(3) do |state|
+				state.set_action(1, "")
+			end
+			dfa.state(4) do |state|
+				state.set_action(2, "state(:multi_line_comment)")
+			end
+			dfa.state(5) do |state|
+				state.set_action(3, "")
+			end
+			dfa.state(6) do |state|
+				state.on(6, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "_")
+				state.set_action(4, ":var")
+			end
+			dfa.state(7) do |state|
+				state.on(7, "0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
+				state.set_action(5, "type: :num, num: text.to_i")
+			end
+			dfa.state(8) do |state|
+				state.set_action(6, "text")
+			end
+			dfa.state(9) do |state|
+				state.set_action(7, ":op")
+			end
+		end
+  
+		lexer.dfa(:multi_line_comment) do |dfa|
+			dfa.state(0) do |state|
+				state.on(1, "*")
+				state.on(4, "\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\a", "\b", "\t", "\n", "\v", "\f", "\r", "\x0E", "\x0F", "\x10", "\x11", "\x12", "\x13", "\x14", "\x15", "\x16", "\x17", "\x18", "\x19", "\x1A", "\e", "\x1C", "\x1D", "\x1E", "\x1F", " ", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "+", ",", "-", ".", "/", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?", "@", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "[", "\\", "]", "^", "_", "`", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "{", "|", "}", "~", "\x7F")
+			end
+			dfa.state(1) do |state|
+				state.on(2, "*")
+				state.on(3, "/")
+				state.set_action(11, "")
+			end
+			dfa.state(2) do |state|
+				state.on(2, "*")
+				state.on(3, "/")
+			end
+			dfa.state(3) do |state|
+				state.set_action(10, "state(:default)")
+			end
+			dfa.state(4) do |state|
+				state.set_action(11, "")
+			end
+		end
+  
+	end
+
+end

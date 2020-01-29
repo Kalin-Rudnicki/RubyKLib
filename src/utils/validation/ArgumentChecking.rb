@@ -1,9 +1,20 @@
 
-Dir.chdir(File.dirname(__FILE__)) do
-	require './../general/RaiseNotMe'
+class Boolean
+	
+	def self.parse(str, name = nil)
+		KLib::ArgumentChecking.type_check(str, :str, String)
+		KLib::ArgumentChecking.type_check(name, :name, Symbol, String, NilClass)
+		case str
+			when "true", "TRUE"
+				true
+			when "false", "FALSE"
+				false
+			else
+				raise "#{name.nil? ? str.inspect : "Parameter '#{name}' (#{str.inspect})"} does not look like a boolean"
+		end
+	end
+	
 end
-
-module Boolean; end
 
 module KLib
 	
@@ -45,6 +56,7 @@ module KLib
 			def type_check_each(obj, name, *valid_types, &block)
 				raise InvalidValidationError.new("Parameter 'name'. No explicit conversion of [#{name.class.inspect}] to [Symbol, String, NilClass].") unless [Symbol, String, NilClass].any? { |klass| name.is_a?(klass) }
 				raise InvalidValidationError.new("Parameter 'valid_types' must have a length > 0.") unless valid_types.length > 0
+				valid_types = valid_types[0] if valid_types.length == 1 && valid_types[0].is_a?(Enumerable)
 				valid_types = valid_types.map { |t| t == Boolean ? [TrueClass, FalseClass] : [t] }.flatten(1)
 				valid_types.each_with_index { |t, i| raise InvalidValidationError.new("Parameter 'valid_types[#{i}]'. No explicit conversion of [#{t.class.inspect}] to [Module].") unless t.is_a?(Module) }
 				type_check(obj, name, Enumerable)
@@ -93,6 +105,10 @@ module KLib
 			
 			def boolean_check(obj, name, &block)
 				type_check(obj, name, Boolean, &block)
+			end
+			
+			def logger_check(obj, name = :logger, &block)
+				type_check(obj, name, Logger, DeadObject, &block)
 			end
 			
 			def path_check(path, name, type = :any, &block)
@@ -235,3 +251,5 @@ module KLib
 	end
 
 end
+
+require_relative '../general/RaiseNotMe'

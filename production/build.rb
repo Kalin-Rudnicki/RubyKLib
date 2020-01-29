@@ -1,6 +1,8 @@
 require_relative '../src/utils/parsing/cli/parse_class'
 require 'fileutils'
 
+# TODO : Make standalone
+
 module KLibBuild
 	
 	cli_spec do |spec|
