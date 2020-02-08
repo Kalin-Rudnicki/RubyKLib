@@ -244,8 +244,10 @@ module KLib
 			end
 			def back_to_mark
 				raise "No mark to backup to" unless @mark
-				@idx = pop_mark[:idx]
-				nil
+				mrk = pop_mark
+				back = @idx - mrk[:idx]
+				backup(back) if back > 0
+				mrk
 			end
 			
 			def mark?
@@ -283,7 +285,10 @@ module KLib
 				ArgumentChecking.type_check(dist, :dist, Integer)
 				raise ArgumentError.new("dist must be > 0, given: #{dist}") if dist <= 0
 				raise ArgumentError.new("backup past start (#{dist} > #{@idx})") if dist > @idx
-				@idx -= dist
+				dist.times do
+					@idx -= 1
+					@line_no -= 1 if @source[@idx] == "\n"
+				end
 				nil
 			end
 			
