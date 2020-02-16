@@ -10,7 +10,7 @@ module KLib
 		class Class < BasicObject
 			
 			class << self
-				attr_reader :hash_args, :rest, :vars, :mets
+				attr_reader :hash_args, :rest, :vars, :mets, :block
 				
 				def parse_file(path)
 					eval(File.read(path), binding, path, 1)
@@ -78,7 +78,11 @@ module KLib
 					end
 				end
 				
-				block.(self) if block
+				if klass.block
+					__call__(:instance_variable_set, klass.block, block)
+				else
+					block.(self) if block
+				end
 				
 				__call__(:remove_instance_variable, :@__building)
 				
@@ -212,22 +216,42 @@ module KLib
 			def __build(parent_mod = nil)
 				::KLib::ArgumentChecking.type_check(parent_mod, :parent_mod, ::Module, ::NilClass)
 				
+				block = false
 				rest = false
 				vars = {}
 				mets = {}
 				
-				@hash_args.keys.each_with_index do |k, i|
-					if k.to_s.start_with?("*")
-						if i == @hash_args.size - 1
-							rest = true
-							vars[:"@#{k[1..-1]}"] = :rest_arg
-						else
-							::Kernel.raise "rest arg must be in last position '#{k}'"
-						end
+				arr = @hash_args.to_a
+				block_arg =
+				if arr.any?
+					if arr[-1][0].to_s.start_with?("&")
+						::Kernel.raise "Can not have block arg with children" if @children.any?
+						block = :"@#{arr.pop[0][1..-1]}"
 					else
-						vars[:"@#{k}"] = :arg
+						nil
 					end
+				else
+					nil
 				end
+				rest_arg =
+				if arr.any?
+					if arr[-1][0].to_s.start_with?("*")
+						rest = true
+						arr.pop
+					else
+						nil
+					end
+				else
+					nil
+				end
+				other_args = arr.to_h
+				other_args.keys.each do |k|
+					::Kernel.raise "block arg must be in last position '#{k}'" if k.to_s.start_with?("&")
+					::Kernel.raise "rest arg must be in last position '#{k}'" if k.to_s.start_with?("*")
+					vars[:"@#{k}"] = :arg
+				end
+				vars[:"@#{rest_arg[0][1..-1]}"] = :rest_arg if rest
+				vars[block] = :block_arg if block
 				
 				@children.each_value do |child|
 					# vars
@@ -249,6 +273,7 @@ module KLib
 				
 				@klass.instance_variable_set(:@hash_args, @hash_args)
 				@klass.instance_variable_set(:@rest, rest)
+				@klass.instance_variable_set(:@block, block)
 				@klass.instance_variable_set(:@vars, vars)
 				@klass.instance_variable_set(:@mets, mets)
 				
